@@ -13,7 +13,7 @@ import "@passageidentity/passage-elements/passage-auth";
 
 <style scoped>
 body {
-  font-family: 'Arial', sans-serif;
+  font-family: "Arial", sans-serif;
   background-color: #f4f4f9;
   margin: 0;
   padding: 20px;
@@ -29,7 +29,7 @@ body {
 }
 
 h1 {
-  font-size: 2.0rem;
+  font-size: 2rem;
   color: #343a40;
   margin-bottom: 30px;
   text-align: center;
