@@ -1,11 +1,9 @@
 import axios from 'axios';
 
 // Configura a baseURL usando a variável de ambiente
-// axios.defaults.baseURL = process.env.VUE_APP_API_BASE_URL;
-// console.log('API Base URL:', process.env.VUE_APP_API_BASE_URL);
+axios.defaults.baseURL = import.meta.env.VITE_BASE_URL || 'http://localhost:19003/api'
 
-axios.defaults.baseURL = 'http://0.0.0.0:19003/api/';
-// axios.defaults.baseURL = 'http://127.0.0.1:8000/api/';
+// axios.defaults.headers.common['Authorization'] = `Bearer ${localStorage.getItem('psg_auth_token')}`
 
 // Adiciona um interceptor para incluir o token de autenticação
 axios.interceptors.request.use(
