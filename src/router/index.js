@@ -4,7 +4,7 @@ import CategoriaView from "../views/CategoriaView.vue";
 import LoginView from "../views/LoginView.vue";
 import LogoutView from "../views/LogoutView.vue";
 import UsuarioView from "../views/UsuarioView.vue";
-import LivroView from "../views/LivroView.vue";
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -18,11 +18,6 @@ const router = createRouter({
       path: "/categorias",
       name: "categorias",
       component: CategoriaView,
-    },
-    {
-      path: "/livros",
-      name: "livros",
-      component: LivroView,
     },
     {
       path: "/login",

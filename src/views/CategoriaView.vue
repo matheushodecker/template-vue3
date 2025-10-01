@@ -1,192 +1,257 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
-import { useCategoriaStore } from '@/stores/categoria'
+import { useCategoriaStore } from '@/stores/categoriaStore' // Ajuste o caminho
 
 const categoriaStore = useCategoriaStore()
 
-const defaultCategoria = { id: null, descricao: '' }
+// 1. Estado Local para o Formulário
+const defaultCategoria = { id: null, nome: '', descricao: '', ativo: true }
 const categoria = reactive({ ...defaultCategoria })
 
+// 2. Ciclo de Vida: Carregar dados ao montar
 onMounted(async () => {
   await categoriaStore.getCategorias()
 })
 
+// 3. Funções de Ação
 function limpar() {
   Object.assign(categoria, { ...defaultCategoria })
 }
 
 async function salvar() {
+  if (!categoria.nome.trim()) {
+    alert("O nome da categoria é obrigatório.")
+    return
+  }
   await categoriaStore.salvarCategoria({ ...categoria })
   limpar()
 }
 
 function editar(categoria_para_editar) {
+  // Garante que o estado local reflita a categoria clicada
   Object.assign(categoria, categoria_para_editar)
 }
 
 async function excluir(id) {
-  await categoriaStore.excluirCategoria(id)
-  limpar()
+  if (confirm("Tem certeza que deseja excluir esta categoria?")) {
+    await categoriaStore.excluirCategoria(id)
+    limpar()
+  }
 }
 </script>
 
 <template>
   <div class="container">
-    <h1>Categorias</h1>
-    <div class="form">
-      <input type="text" v-model="categoria.descricao" placeholder="Descrição" />
-      <button @click="salvar">Salvar</button>
-      <button @click="limpar">Limpar</button>
+    <h1>Gerenciamento de Categorias</h1>
+
+    <div class="form-container">
+      <h2>{{ categoria.id ? 'Editar Categoria' : 'Nova Categoria' }}</h2>
+      <div class="form-group">
+        <input type="text" v-model="categoria.nome" placeholder="Nome da Categoria" />
+        <textarea v-model="categoria.descricao" placeholder="Descrição (Opcional)"></textarea>
+      </div>
+      <div class="form-actions">
+        <button @click="salvar" :disabled="categoriaStore.isLoading">
+          {{ categoria.id ? 'Atualizar' : 'Salvar' }}
+        </button>
+        <button @click="limpar" class="cancelar" :disabled="categoriaStore.isLoading">
+          Cancelar
+        </button>
+      </div>
     </div>
-    <ul class="categoria-list">
-      <li v-for="categoria in categoriaStore.categorias" :key="categoria.id">
-        <span @click="editar(categoria)"> ({{ categoria.id }}) - {{ categoria.descricao }} </span>
-        <button @click="excluir(categoria.id)">Excluir</button>
+    
+    <hr>
+
+    <div v-if="categoriaStore.isLoading" class="loading-message">
+        Carregando dados...
+    </div>
+
+    <ul class="categoria-list" v-else>
+      <li v-for="cat in categoriaStore.categorias" :key="cat.id" :class="{ 'categoria-inativa': !cat.ativo }">
+        <span class="categoria-info" @click="editar(cat)">
+          <span class="id-tag">#{{ cat.id }}</span>
+          <strong>{{ cat.nome }}</strong> 
+          <span class="descricao">{{ cat.descricao }}</span>
+        </span>
+        <div class="actions">
+          <button @click="editar(cat)" class="editar">Editar</button>
+          <button @click="excluir(cat.id)" class="excluir">Excluir</button>
+        </div>
       </li>
     </ul>
-    <div class="paginator">
-      <button :disabled="categoriaStore.meta.page == 1" @click="categoriaStore.paginaAnterior">
+
+    <div class="paginator" v-if="categoriaStore.meta.total_pages > 1">
+      <button 
+        :disabled="categoriaStore.meta.page <= 1 || categoriaStore.isLoading" 
+        @click="categoriaStore.paginaAnterior"
+      >
         Anterior
       </button>
+      <span>Página {{ categoriaStore.meta.page }} de {{ categoriaStore.meta.total_pages }}</span>
       <button
-        :disabled="categoriaStore.meta.page == categoriaStore.meta.total_pages"
+        :disabled="categoriaStore.meta.page >= categoriaStore.meta.total_pages || categoriaStore.isLoading"
         @click="categoriaStore.proximaPagina"
       >
         Próxima
       </button>
-      <span>Página {{ categoriaStore.meta.page }} de {{ categoriaStore.meta.total_pages }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-
-body {
-  font-family: 'Arial', sans-serif;
-  background-color: #f4f4f9;
-  margin: 0;
-  padding: 0;
-}
-
 .container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 30px;
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  font-family: Arial, sans-serif;
 }
 
 h1 {
-  font-size: 1.5rem;
-  color: #343a40;
-  margin-bottom: 30px;
   text-align: center;
+  color: #2c3e50;
+  margin-bottom: 25px;
 }
 
-.form {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 30px;
+h2 {
+    font-size: 1.3rem;
+    color: #34495e;
+    margin-bottom: 15px;
 }
 
-input[type='text'] {
-  padding: 12px;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  width: 250px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: border-color 0.3s;
+/* Formulário */
+.form-container {
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f7f9fb;
 }
 
-input[type='text']:focus {
-  border-color: #343a40;
-  outline: none;
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+input[type='text'], textarea {
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1rem;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
 }
 
 button {
-  padding: 12px 25px;
-  font-size: 1rem;
-  background-color: #343a40;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #41b883;
+    color: white;
+    transition: background-color 0.3s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #358a66;
+}
+
+button.cancelar {
+    background-color: #95a5a6;
+}
+button.cancelar:hover:not(:disabled) {
+    background-color: #7f8c8d;
 }
 
 button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
-button:hover {
-  background-color: #000;
-}
-
-button:disabled:hover {
-  background-color: #ccc;
-  cursor: not-allowed;
+/* Lista */
+.loading-message {
+    text-align: center;
+    color: #41b883;
+    font-weight: bold;
+    margin: 20px 0;
 }
 
 .categoria-list {
   list-style: none;
   padding: 0;
-  margin: 0;
-  width: 100%;
-  max-width: 500px;
 }
 
-li {
+.categoria-list li {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #fff;
   padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 10px;
+  background-color: #fff;
+  border: 1px solid #eee;
+  border-left: 5px solid #3498db;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
-li span {
-  cursor: pointer;
-  font-size: 1.1rem;
+.categoria-list li.categoria-inativa {
+    border-left-color: #e74c3c;
+    opacity: 0.8;
 }
 
-li span:hover {
-  color: #343a40;
+.categoria-info {
+    flex-grow: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color:#0004ff
 }
 
-li button {
-  padding: 8px 12px;
-  font-size: 0.9rem;
-  background-color: #e74c3c;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.id-tag {
+    background-color: #ecf0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    margin-right: 10px;
+    color: #7f8c8d;
 }
 
-li button:hover {
-  background-color: #c0392b;
+.descricao {
+    margin-left: 15px;
+    font-size: 0.9rem;
+    color: #001516;
 }
 
-@media (max-width: 600px) {
-  .form {
-    flex-direction: column;
-    gap: 10px;
-  }
+.actions button {
+    margin-left: 8px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+}
 
-  input[type='text'] {
-    width: 100%;
-  }
+.actions .editar {
+    background-color: #3498db;
+}
 
-  ul {
-    padding: 0;
-  }
+.actions .excluir {
+    background-color: #e74c3c;
+}
+
+/* Paginação */
+.paginator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 30px;
+    font-size: 1rem;
+    color: #555;
 }
 </style>
