@@ -9,7 +9,7 @@ export const useCategoriaStore = defineStore('categoria', () => {
   const categorias = ref([
     {
       id: 1,
-      descricao: 'Categoria 1'
+      nome: 'categoria'
     },
     {
       id: 2,
