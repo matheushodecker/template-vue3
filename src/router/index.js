@@ -4,6 +4,7 @@ import CategoriaView from "../views/CategoriaView.vue";
 import LoginView from "../views/LoginView.vue";
 import LogoutView from "../views/LogoutView.vue";
 import UsuarioView from "../views/UsuarioView.vue";
+import FornecedorView from "../views/FornecedorView.vue";
 
 
 const router = createRouter({
@@ -18,6 +19,11 @@ const router = createRouter({
       path: "/categorias",
       name: "categorias",
       component: CategoriaView,
+    },
+    {
+      path: "/fornecedor",
+      name: "fornecedor",
+      component: FornecedorView,
     },
     {
       path: "/login",
