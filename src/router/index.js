@@ -5,6 +5,7 @@ import LoginView from "../views/LoginView.vue";
 import LogoutView from "../views/LogoutView.vue";
 import UsuarioView from "../views/UsuarioView.vue";
 import FornecedorView from "../views/FornecedorView.vue";
+import CargoView from "../views/CargoView.vue";
 
 
 const router = createRouter({
@@ -24,7 +25,18 @@ const router = createRouter({
       path: "/fornecedor",
       name: "fornecedor",
       component: FornecedorView,
+
     },
+         {
+      path: "/cargo",
+      name: "cargo",
+      component:CargoView ,
+    },
+    //   {
+    //   path: "",
+    //   name: "",
+    //   component: ,
+    // },
     {
       path: "/login",
       name: "login",
