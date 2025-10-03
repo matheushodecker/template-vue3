@@ -232,7 +232,7 @@ nav {
 .dropdown-content {
   display: none;
   position: absolute;
-  top: calc(100% + var(--spacing-sm, 8px));
+  top: calc(100% + var(--spacing-sm, 1px));
   left: 0;
   background-color: var(--color-surface, #ffffff);
   min-width: 220px;
@@ -245,7 +245,7 @@ nav {
 
 .dropdown:hover .dropdown-content {
   display: block;
-  animation: slideDown var(--transition-base, 0.3s ease);
+  animation: slideDown var(--transition-base, 0.4s ease);
 }
 
 @keyframes slideDown {
