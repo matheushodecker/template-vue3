@@ -12,6 +12,10 @@ import FormaPagamentoView from "../views/FormaPagamentoView.vue";
 import PagamentoView from "../views/PagamentoView.vue";
 import VendaView from "../views/VendaView.vue";
 import ProdutoView from "../views/ProdutoView.vue";
+import PromocaoView from "../views/PromocaoView.vue";
+import CompraView from "../views/CompraView.vue";
+import EstoqueView from "../views/EstoqueView.vue";
+import RelatorioView from "../views/RelatorioView.vue";
 
 
 const router = createRouter({
@@ -67,6 +71,26 @@ const router = createRouter({
       path: "/produto",
       name: "produto",
       component: ProdutoView,
+    },
+        {
+      path: "/promocao",
+      name: "promocao",
+      component:PromocaoView ,
+    },
+      {
+      path: "/compra",
+      name: "compra",
+      component: CompraView
+    },
+       {
+      path: "/estoque",
+      name: "estoque",
+      component: EstoqueView,
+    },
+      {
+      path: "/relatorio",
+      name: "relatorio",
+      component: RelatorioView,
     },
     //   {
     //   path: "",

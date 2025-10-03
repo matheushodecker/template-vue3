@@ -31,6 +31,10 @@ const toggleDropdown = () => {
         <router-link :to="{ name: 'pagamento' }">Pagamentos</router-link>
         <router-link :to="{ name: 'venda' }">Vendas</router-link>
         <router-link :to="{ name: 'produto' }">Produtos</router-link>
+        <router-link :to="{ name: 'promocao' }">Promoções</router-link>
+        <router-link :to="{ name: 'compra' }">Compras</router-link>
+        <router-link :to="{ name: 'estoque' }">Estoque</router-link>
+        <router-link :to="{ name: 'relatorio' }">Relatorios</router-link>
         <!-- <router-link :to="{ name: '' }"></router-link> -->
       </div>
 
