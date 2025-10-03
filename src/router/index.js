@@ -8,6 +8,10 @@ import FornecedorView from "../views/FornecedorView.vue";
 import CargoView from "../views/CargoView.vue";
 import FuncionarioView from "../views/FuncionarioView.vue";
 import ClienteView from "../views/ClienteView.vue";
+import FormaPagamentoView from "../views/FormaPagamentoView.vue";
+import PagamentoView from "../views/PagamentoView.vue";
+import VendaView from "../views/VendaView.vue";
+import ProdutoView from "../views/ProdutoView.vue";
 
 
 const router = createRouter({
@@ -29,20 +33,40 @@ const router = createRouter({
       component: FornecedorView,
 
     },
-         {
+    {
       path: "/cargo",
       name: "cargo",
-      component:CargoView ,
+      component: CargoView,
     },
-      {
+    {
       path: "/funcionario",
       name: "funcionario",
       component: FuncionarioView,
     },
-      {
+    {
       path: "/cliente",
       name: "cliente",
-      component: ClienteView ,
+      component: ClienteView,
+    },
+    {
+      path: "/formaPagamento",
+      name: "formaPagamento",
+      component: FormaPagamentoView,
+    },
+    {
+      path: "/pagamento",
+      name: "pagamento",
+      component: PagamentoView,
+    },
+    {
+      path: "/venda",
+      name: "venda",
+      component: VendaView,
+    },
+    {
+      path: "/produto",
+      name: "produto",
+      component: ProdutoView,
     },
     //   {
     //   path: "",
