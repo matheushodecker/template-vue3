@@ -1,22 +1,22 @@
-import { createRouter, createWebHistory } from "vue-router";
-import HomeView from "../views/HomeView.vue";
-import CategoriaView from "../views/CategoriaView.vue";
-import LoginView from "../views/LoginView.vue";
-import LogoutView from "../views/LogoutView.vue";
-import UsuarioView from "../views/UsuarioView.vue";
-import FornecedorView from "../views/FornecedorView.vue";
-import CargoView from "../views/CargoView.vue";
-import FuncionarioView from "../views/FuncionarioView.vue";
-import ClienteView from "../views/ClienteView.vue";
-import FormaPagamentoView from "../views/FormaPagamentoView.vue";
-import PagamentoView from "../views/PagamentoView.vue";
-import VendaView from "../views/VendaView.vue";
-import ProdutoView from "../views/ProdutoView.vue";
-import PromocaoView from "../views/PromocaoView.vue";
-import CompraView from "../views/CompraView.vue";
-import EstoqueView from "../views/EstoqueView.vue";
-import RelatorioView from "../views/RelatorioView.vue";
-
+import { createRouter, createWebHistory } from "vue-router"
+import HomeView from "../views/HomeView.vue"
+import CategoriaView from "../views/CategoriaView.vue"
+import LoginView from "../views/LoginView.vue"
+import LogoutView from "../views/LogoutView.vue"
+import UsuarioView from "../views/UsuarioView.vue"
+import FornecedorView from "../views/FornecedorView.vue"
+import CargoView from "../views/CargoView.vue"
+import FuncionarioView from "../views/FuncionarioView.vue"
+import ClienteView from "../views/ClienteView.vue"
+import FormaPagamentoView from "../views/FormaPagamentoView.vue"
+import PagamentoView from "../views/PagamentoView.vue"
+import VendaView from "../views/VendaView.vue"
+import ProdutoView from "../views/ProdutoView.vue"
+import PromocaoView from "../views/PromocaoView.vue"
+import CompraView from "../views/CompraView.vue"
+import EstoqueView from "../views/EstoqueView.vue"
+import RelatorioView from "../views/RelatorioView.vue"
+import CaixaRapidoView from "../views/CaixaRapidoView.vue"
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -27,6 +27,11 @@ const router = createRouter({
       component: HomeView,
     },
     {
+      path: "/caixa",
+      name: "caixa",
+      component: CaixaRapidoView,
+    },
+    {
       path: "/categorias",
       name: "categorias",
       component: CategoriaView,
@@ -35,7 +40,6 @@ const router = createRouter({
       path: "/fornecedor",
       name: "fornecedor",
       component: FornecedorView,
-
     },
     {
       path: "/cargo",
@@ -72,22 +76,22 @@ const router = createRouter({
       name: "produto",
       component: ProdutoView,
     },
-        {
+    {
       path: "/promocao",
       name: "promocao",
-      component:PromocaoView ,
+      component: PromocaoView,
     },
-      {
+    {
       path: "/compra",
       name: "compra",
-      component: CompraView
+      component: CompraView,
     },
-       {
+    {
       path: "/estoque",
       name: "estoque",
       component: EstoqueView,
     },
-      {
+    {
       path: "/relatorio",
       name: "relatorio",
       component: RelatorioView,
@@ -111,8 +115,8 @@ const router = createRouter({
       path: "/logout",
       name: "logout",
       component: LogoutView,
-    }
+    },
   ],
-});
+})
 
-export default router;
+export default router
