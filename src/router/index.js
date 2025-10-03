@@ -6,6 +6,8 @@ import LogoutView from "../views/LogoutView.vue";
 import UsuarioView from "../views/UsuarioView.vue";
 import FornecedorView from "../views/FornecedorView.vue";
 import CargoView from "../views/CargoView.vue";
+import FuncionarioView from "../views/FuncionarioView.vue";
+import ClienteView from "../views/ClienteView.vue";
 
 
 const router = createRouter({
@@ -31,6 +33,16 @@ const router = createRouter({
       path: "/cargo",
       name: "cargo",
       component:CargoView ,
+    },
+      {
+      path: "/funcionario",
+      name: "funcionario",
+      component: FuncionarioView,
+    },
+      {
+      path: "/cliente",
+      name: "cliente",
+      component: ClienteView ,
     },
     //   {
     //   path: "",
