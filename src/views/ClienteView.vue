@@ -1,571 +1,508 @@
 <script setup>
 import { reactive, onMounted, ref } from 'vue'
-import { useClienteStore } from '@/stores/clienteStore' 
-
+import { useClienteStore } from '@/stores/clienteStore'
 const clienteStore = useClienteStore()
-
-// --- ESTADO DE CONTROLE DE VISIBILIDADE E DADOS ---
-const formAberto = ref(false) 
-
-const defaultCliente = { 
-    id: null, 
-    nome: '', 
-    tipo_pessoa: 'F', // Default: Pessoa Física
-    cpf_cnpj: '',
-    rg_ie: null,
-    
-    // Endereço (Todos opcionais no Modelo Django)
-    endereco: null,
-    bairro: null,
-    cidade: null,
-    estado: null,
-    cep: null,
-    
-    // Contato (email é obrigatório no Serializer)
-    telefone: null,
-    celular: null,
-    email: '',
-    
-    // Adicionais
-    data_nascimento: null,
-    limite_credito: 0.00,
-    ativo: true,
-    observacoes: null,
+const formAberto = ref(false)
+const defaultCliente = {
+  id: null, nome: '', tipo_pessoa: 'F', cpf_cnpj: '', rg_ie: null,
+  endereco: null, bairro: null, cidade: null, estado: null, cep: null,
+  telefone: null, celular: null, email: '', data_nascimento: null,
+  limite_credito: 0.00, ativo: true, observacoes: null,
 }
 const cliente = reactive({ ...defaultCliente })
-
-// 2. Ciclo de Vida: Carregar dados
-onMounted(async () => {
-    await clienteStore.getClientes()
-})
-
-// Função auxiliar para verificar se o campo está vazio
+onMounted(async () => { await clienteStore.getClientes() })
 function isFieldEmpty(value) {
-    if (typeof value === 'string') return value.trim() === '';
-    return value === null || value === undefined;
+  if (typeof value === 'string') return value.trim() === '';
+  return value === null || value === undefined;
 }
-
-// --- Funções de Ação ---
 function limpar() {
-    Object.assign(cliente, { ...defaultCliente })
-    formAberto.value = false
+  Object.assign(cliente, { ...defaultCliente })
+  formAberto.value = false
 }
-
 async function salvar() {
-    // 1. VALIDAÇÃO EXPLÍCITA de campos OBRIGATÓRIOS
-    if (isFieldEmpty(cliente.nome) || isFieldEmpty(cliente.cpf_cnpj) || isFieldEmpty(cliente.email)) 
-    {
-        alert("Nome, CPF/CNPJ e Email são campos obrigatórios.")
-        return
-    }
-    
-    // 2. Cria a cópia dos dados
-    const dadosParaEnviar = { ...cliente };
-    
-    // 3. LIMPEZA CRÍTICA: CPF/CNPJ (removendo máscara)
-    if (dadosParaEnviar.cpf_cnpj) {
-        dadosParaEnviar.cpf_cnpj = dadosParaEnviar.cpf_cnpj.replace(/[^\d]/g, ''); 
-    }
-
-    // 4. TRATAMENTO DE CAMPOS OPCIONAIS (Garantindo que "" seja enviado como null)
-    // O DRF aceita null para campos opcionais, mas não strings vazias para DateField ou CharField se forem interpretados mal.
-    if (isFieldEmpty(dadosParaEnviar.data_nascimento)) {
-        dadosParaEnviar.data_nascimento = null;
-    }
-    // Aplica para todos os CharFields opcionais que estejam vazios (evita erros ambíguos)
-    for (const key of ['rg_ie', 'endereco', 'bairro', 'cidade', 'estado', 'cep', 'telefone', 'celular', 'observacoes']) {
-        if (isFieldEmpty(dadosParaEnviar[key])) {
-            dadosParaEnviar[key] = null;
-        }
-    }
-
-    await clienteStore.salvarCliente(dadosParaEnviar)
-    limpar()
+  if (isFieldEmpty(cliente.nome) || isFieldEmpty(cliente.cpf_cnpj) || isFieldEmpty(cliente.email)) {
+    alert("Nome, CPF/CNPJ e Email são campos obrigatórios.")
+    return
+  }
+  const dadosParaEnviar = { ...cliente };
+  if (dadosParaEnviar.cpf_cnpj) {
+    dadosParaEnviar.cpf_cnpj = dadosParaEnviar.cpf_cnpj.replace(/[^\d]/g, '');
+  }
+  if (isFieldEmpty(dadosParaEnviar.data_nascimento)) { dadosParaEnviar.data_nascimento = null; }
+  for (const key of ['rg_ie', 'endereco', 'bairro', 'cidade', 'estado', 'cep', 'telefone', 'celular', 'observacoes']) {
+    if (isFieldEmpty(dadosParaEnviar[key])) { dadosParaEnviar[key] = null; }
+  }
+  await clienteStore.salvarCliente(dadosParaEnviar)
+  limpar()
 }
-
 function editar(cliente_para_editar) {
-    // Formatação da data de nascimento para o input type="date"
-    const dataNascimentoFormatada = cliente_para_editar.data_nascimento ? 
-                                    cliente_para_editar.data_nascimento.substring(0, 10) : null;
-    
-    Object.assign(cliente, { 
-        ...cliente_para_editar, 
-        data_nascimento: dataNascimentoFormatada,
-        // Garante que a chave estrangeira seja tratada
-        tipo_pessoa: cliente_para_editar.tipo_pessoa || 'F'
-    })
-    formAberto.value = true
+  const dataNascimentoFormatada = cliente_para_editar.data_nascimento ? cliente_para_editar.data_nascimento.substring(0, 10) : null;
+  Object.assign(cliente, {
+    ...cliente_para_editar,
+    data_nascimento: dataNascimentoFormatada,
+    tipo_pessoa: cliente_para_editar.tipo_pessoa || 'F'
+  })
+  formAberto.value = true
 }
-
 async function excluir(id) {
-    if (confirm("Tem certeza que deseja excluir este cliente?")) {
-        await clienteStore.excluirCliente(id)
-        limpar()
-    }
+  if (confirm("Tem certeza que deseja excluir este cliente?")) {
+    await clienteStore.excluirCliente(id)
+    limpar()
+  }
 }
-
 function toggleForm() {
-    if (formAberto.value) {
-        limpar(); 
-    } else {
-        formAberto.value = true;
-    }
+  if (formAberto.value) { limpar(); }
+  else { formAberto.value = true; }
+}
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 </script>
 
 <template>
-  <div class="container">
-    <h1>Gerenciamento de Clientes</h1>
+  <div class="crud-container">
+    <h1><span class="icon">👥</span> Gerenciamento de Clientes</h1>
 
-    <div class="form-toggle">
-        <button 
-            @click="toggleForm"
-            :class="{ 'cancelar': formAberto }"
-        >
-            {{ cliente.id ? 'Editar Cliente' : formAberto ? 'Fechar Formulário' : 'Novo Cliente' }}
-        </button>
+    <div class="crud-header">
+       <button class="btn btn-primary" @click="toggleForm">
+        {{ formAberto ? 'Fechar Formulário' : 'Novo Cliente' }}
+      </button>
     </div>
 
-    <form class="form-container" @submit.prevent="salvar" v-if="formAberto">
+    <div class="form-container" v-if="formAberto">
       <h2>{{ cliente.id ? 'Editar Cliente' : 'Novo Cliente' }}</h2>
+      <form @submit.prevent="salvar">
 
-      <section>
-        <h3>Dados Básicos</h3>
-        <div class="form-group-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
-          <div>
-            <label for="nome">Nome/Razão Social*</label>
-            <input id="nome" type="text" v-model="cliente.nome" required placeholder="Nome do Cliente" />
+        <section class="form-section">
+          <h3>Dados Básicos</h3>
+          <div class="form-grid grid-cols-4">
+             <div class="form-group span-2">
+              <label for="nome">Nome/Razão Social*</label>
+              <input id="nome" type="text" v-model="cliente.nome" required placeholder="Nome do Cliente" />
+            </div>
+             <div class="form-group">
+              <label for="tipoPessoa">Tipo Pessoa</label>
+              <select id="tipoPessoa" v-model="cliente.tipo_pessoa">
+                <option value="F">Pessoa Física</option>
+                <option value="J">Pessoa Jurídica</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cpfCnpj">CPF/CNPJ*</label>
+              <input id="cpfCnpj" type="tel" v-model="cliente.cpf_cnpj" required placeholder="Apenas números" />
+            </div>
+             <div class="form-group span-2">
+              <label for="rgIe">RG/Inscrição Estadual</label>
+              <input id="rgIe" type="text" v-model="cliente.rg_ie" placeholder="Opcional" />
+            </div>
+             <div class="form-group">
+              <label for="dataNascimento">Nascimento</label>
+              <input id="dataNascimento" type="date" v-model="cliente.data_nascimento" />
+            </div>
+            <div class="form-group checkbox-group align-end">
+              <input id="ativo" type="checkbox" v-model="cliente.ativo" />
+              <label for="ativo" class="inline-label">Cliente Ativo</label>
+            </div>
           </div>
-          <div>
-            <label for="tipoPessoa">Tipo Pessoa</label>
-            <select id="tipoPessoa" v-model="cliente.tipo_pessoa">
-              <option value="F">Pessoa Física</option>
-              <option value="J">Pessoa Jurídica</option>
-            </select>
+        </section>
+
+        <section class="form-section">
+          <h3>Contato e Crédito</h3>
+          <div class="form-grid grid-cols-3">
+            <div class="form-group">
+              <label for="email">Email*</label>
+              <input id="email" type="email" v-model="cliente.email" required placeholder="email@dominio.com" />
+            </div>
+            <div class="form-group">
+              <label for="celular">Celular</label>
+              <input id="celular" type="tel" v-model="cliente.celular" placeholder="(XX) 9XXXX-XXXX" />
+            </div>
+            <div class="form-group">
+              <label for="telefone">Telefone</label>
+              <input id="telefone" type="tel" v-model="cliente.telefone" placeholder="(XX) XXXX-XXXX" />
+            </div>
+            <div class="form-group">
+              <label for="limiteCredito">Limite de Crédito</label>
+              <input id="limiteCredito" type="number" step="0.01" v-model.number="cliente.limite_credito" placeholder="0,00" />
+            </div>
           </div>
-          <div>
-            <label for="cpfCnpj">CPF/CNPJ*</label>
-            <input id="cpfCnpj" type="tel" v-model="cliente.cpf_cnpj" required placeholder="Apenas números" />
+        </section>
+
+        <section class="form-section">
+          <h3>Endereço (Opcional)</h3>
+          <div class="form-grid grid-cols-4"> <div class="form-group span-4">
+              <label for="endereco">Endereço</label>
+              <input id="endereco" type="text" v-model="cliente.endereco" placeholder="Rua, Número e Complemento" />
+            </div>
+             <div class="form-group span-2">
+              <label for="bairro">Bairro</label>
+              <input id="bairro" type="text" v-model="cliente.bairro" />
+            </div>
+             <div class="form-group span-2">
+              <label for="cidade">Cidade</label>
+              <input id="cidade" type="text" v-model="cliente.cidade" />
+            </div>
+            <div class="form-group">
+              <label for="estado">Estado</label>
+              <input id="estado" type="text" v-model="cliente.estado" maxlength="2" placeholder="UF" />
+            </div>
+            <div class="form-group">
+              <label for="cep">CEP</label>
+              <input id="cep" type="text" v-model="cliente.cep" placeholder="00000-000" />
+            </div>
           </div>
-          <div>
-            <label for="rgIe">RG/Inscrição Estadual</label>
-            <input id="rgIe" type="text" v-model="cliente.rg_ie" placeholder="RG ou Inscrição Estadual (Opcional)" />
-          </div>
+        </section>
+
+         <section class="form-section">
+           <h3>Observações</h3>
+           <div class="form-group">
+              <label for="observacoesGerais">Observações Gerais</label>
+              <textarea id="observacoesGerais" v-model="cliente.observacoes" rows="3"></textarea>
+            </div>
+        </section>
+
+        <div class="form-actions">
+           <button type="button" @click="limpar" class="btn btn-light" :disabled="clienteStore.isLoading">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" :disabled="clienteStore.isLoading">
+            {{ cliente.id ? 'Atualizar Cliente' : 'Salvar Cliente' }}
+          </button>
         </div>
-      </section>
-
-      <section>
-        <h3>Contato e Crédito</h3>
-        <div class="form-group-grid">
-          <div>
-            <label for="email">Email*</label>
-            <input id="email" type="email" v-model="cliente.email" required placeholder="email@dominio.com" />
-          </div>
-          <div>
-            <label for="celular">Celular</label>
-            <input id="celular" type="tel" v-model="cliente.celular" placeholder="(XX) 9XXXX-XXXX" />
-          </div>
-          <div>
-            <label for="telefone">Telefone</label>
-            <input id="telefone" type="tel" v-model="cliente.telefone" placeholder="(XX) XXXX-XXXX" />
-          </div>
-          <div>
-            <label for="limiteCredito">Limite de Crédito</label>
-            <input id="limiteCredito" type="number" step="0.01" v-model.number="cliente.limite_credito" placeholder="0.00" />
-          </div>
-          <div>
-            <label for="dataNascimento">Nascimento</label>
-            <input id="dataNascimento" type="date" v-model="cliente.data_nascimento" />
-          </div>
-          <div class="checkbox-group">
-            <input id="ativo" type="checkbox" v-model="cliente.ativo" />
-            <label for="ativo" class="inline-label">Cliente Ativo</label>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h3>Endereço (Opcional)</h3>
-        <div class="form-group-grid-address">
-          <div class="full-width">
-            <label for="endereco">Endereço</label>
-            <input id="endereco" type="text" v-model="cliente.endereco" placeholder="Rua, Número e Complemento" />
-          </div>
-
-          <div>
-            <label for="bairro">Bairro</label>
-            <input id="bairro" type="text" v-model="cliente.bairro" />
-          </div>
-          <div>
-            <label for="cidade">Cidade</label>
-            <input id="cidade" type="text" v-model="cliente.cidade" />
-          </div>
-          <div>
-            <label for="estado">Estado</label>
-            <input id="estado" type="text" v-model="cliente.estado" maxlength="2" placeholder="Ex: SC" />
-          </div>
-          <div>
-            <label for="cep">CEP</label>
-            <input id="cep" type="text" v-model="cliente.cep" placeholder="00000-000" />
-          </div>
-        </div>
-      </section>
-      
-      <div class="form-group-full">
-        <div>
-            <label for="observacoesGerais">Observações</label>
-            <textarea id="observacoesGerais" v-model="cliente.observacoes"></textarea>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button type="submit" :disabled="clienteStore.isLoading">
-          {{ cliente.id ? 'Atualizar' : 'Salvar' }} Cliente
-        </button>
-        <button type="button" @click="limpar" class="cancelar" :disabled="clienteStore.isLoading">
-          Cancelar
-        </button>
-      </div>
-    </form>
-    
-    <hr>
-    
-    <div v-if="clienteStore.isLoading" class="loading-message">
-        Carregando clientes...
+      </form>
     </div>
 
-    <ul class="cliente-list" v-else>
-      <li v-for="c in clienteStore.clientes" :key="c.id" :class="{ 'cliente-inativo': !c.ativo }">
-        <span class="cliente-info" @click="editar(c)">
+    <hr class="divider" />
+
+    <div v-if="clienteStore.isLoading" class="loading-message">
+      Carregando clientes...
+    </div>
+     <div v-else-if="clienteStore.clientes.length === 0" class="empty-state">
+      <p>Nenhum cliente encontrado.</p>
+    </div>
+    <ul class="crud-list" v-else>
+      <li
+        v-for="c in clienteStore.clientes"
+        :key="c.id"
+        class="list-item"
+        :class="{ 'status-inactive': !c.ativo }"
+        @click="editar(c)"
+      >
+        <div class="item-main-info">
           <span class="id-tag">#{{ c.id }}</span>
-          <strong>{{ c.nome }}</strong> 
-          <span class="cpf-cnpj">{{ c.cpf_cnpj }}</span>
-          <span class="email">{{ c.email }}</span>
-        </span>
-        <div class="actions">
-          <button @click="editar(c)" class="editar">Editar</button>
-          <button @click="excluir(c.id)" class="excluir">Excluir</button>
+          <span class="item-name">{{ c.nome }}</span>
+           <span class="item-status" v-if="!c.ativo">INATIVO</span>
+        </div>
+
+        <div class="item-details">
+          <span class="detail-tag doc">{{ c.cpf_cnpj }}</span>
+          <span class="detail-tag email">{{ c.email }}</span>
+          <span class="detail-tag phone">{{ c.celular || c.telefone || 'Sem contato' }}</span>
+        </div>
+
+        <div class="item-actions">
+           <button @click.stop="editar(c)" class="btn-action btn-edit" title="Editar">✏️</button>
+           <button @click.stop="excluir(c.id)" class="btn-action btn-delete" title="Excluir">🗑️</button>
         </div>
       </li>
     </ul>
 
+    <div class="paginator" v-if="!clienteStore.isLoading && clienteStore.meta.total_pages > 1">
+       <button class="btn btn-light" :disabled="clienteStore.meta.page <= 1" @click="clienteStore.paginaAnterior">Anterior</button>
+      <span>Página {{ clienteStore.meta.page }} de {{ clienteStore.meta.total_pages }}</span>
+      <button class="btn btn-light" :disabled="clienteStore.meta.page >= clienteStore.meta.total_pages" @click="clienteStore.proximaPagina">Próxima</button>
     </div>
+
+  </div>
 </template>
+
 <style scoped>
-/* Variáveis para fácil manutenção de cores */
-:root {
-  --primary-color: #41b883; /* Vue Green */
-  --secondary-color: #34495e; /* Dark Blue/Gray */
-  --accent-color: #3498db; /* Blue for Edit */
-  --danger-color: #e74c3c; /* Red for Delete */
-  --light-bg: #f7f9fb;
-  --white: #ffffff;
-  --border-color: #e0e0e0;
+/* --- Container Principal --- */
+.crud-container {
+  max-width: 1200px; /* Ajustado para Cliente */
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
-.container {
-  max-width: 1200px; /* Aumentado para acomodar o formulário longo */
-  margin: 40px auto;
-  padding: 40px;
-  background-color: var(--white);
-  border-radius: 12px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* --- Títulos --- */
 h1 {
-  text-align: center;
-  color: var(--secondary-color);
-  margin-bottom: 35px;
-  font-size: 2.5rem;
-  font-weight: 700;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-light);
+}
+h1 .icon {
+  font-size: 2.2rem;
 }
 
-h2 {
-  font-size: 1.6rem;
-  color: var(--secondary-color);
-  margin-bottom: 20px;
-  font-weight: 600;
+/* --- Cabeçalho (Busca e Botão Novo) --- */
+.crud-header {
+  display: flex;
+  justify-content: flex-end; /* Apenas botão novo */
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+.search-filter {
+  /* Espaço para futuros filtros */
 }
 
-h3 { /* Estilo para títulos de seção */
-    font-size: 1.3rem;
-    color: var(--secondary-color);
-    margin-top: 25px;
-    margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
-}
-
-/* --- Toggle Button --- */
-.form-toggle {
-    margin-bottom: 25px;
-    text-align: right;
-}
-.form-toggle button {
-    text-transform: none; 
-}
-
-/* --- Formulário Geral e Layout de Grid --- */
+/* --- Formulário --- */
 .form-container {
-  padding: 25px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 30px;
-  background-color: var(--light-bg);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg);
+  background-color: var(--color-background);
+}
+h2 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-lg);
+  font-weight: var(--font-weight-semibold);
 }
 
-/* Grid Básico para os campos (200px por coluna) */
-.form-group-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+.form-section {
+  margin-bottom: var(--spacing-lg);
+}
+.form-section h3 {
+  font-size: var(--font-size-lg);
+  color: var(--color-secondary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-sm);
 }
 
-/* Grid específico para Endereço */
-.form-group-grid-address {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 80px 1fr; /* Endereço, Bairro, Cidade, Estado, CEP */
-    gap: 15px;
-    margin-bottom: 20px;
+.form-grid {
+  display: grid;
+  gap: var(--spacing-md);
 }
+.grid-cols-1 { grid-template-columns: 1fr; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* Ocupa a largura total */
-.form-group-grid-address .full-width, .form-group-full > div {
-    grid-column: 1 / -1;
-}
+.form-group.span-2 { grid-column: span 2; }
+.form-group.span-3 { grid-column: span 3; }
+.form-group.span-4 { grid-column: span 4; }
 
-/* Estilo para Textareas/Observações */
-.form-group-full {
-    display: flex;
-    gap: 15px;
-    margin-top: 15px;
-}
-.form-group-full > div {
-    flex: 1;
-}
-
-/* Estilo para as Labels */
-label {
-    display: block; 
-    font-weight: 600;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-    margin-bottom: 5px; 
-}
-
-/* Estilos de input/select/textarea */
-input[type='text'], input[type='tel'], input[type='email'], input[type='url'], input[type='number'], input[type='date'], select, textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: var(--white);
-}
-
-input[type='text']:focus, input[type='tel']:focus, input[type='email']:focus, input[type='url']:focus, input[type='number']:focus, input[type='date']:focus, select:focus, textarea:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.2);
-}
-
-/* Checkbox e Label Inline */
+/* Checkbox */
 .checkbox-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 25px; 
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md); /* Alinha com inputs */
+}
+.checkbox-group.align-end {
+  align-items: flex-end;
+  padding-bottom: 10px; /* Ajuste fino */
 }
 .checkbox-group input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
+  width: 20px;
+  height: 20px;
 }
 .checkbox-group label.inline-label {
-    font-weight: normal;
-    margin: 0;
-    cursor: pointer;
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+  margin: 0;
+  cursor: pointer;
 }
 
-/* --- Ações e Botões --- */
+/* Campo calculado */
+.calculated-field {
+  background-color: var(--color-primary-light);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
 .form-actions {
   display: flex;
-  justify-content: flex-end; 
-  gap: 15px;
-  margin-top: 30px;
-  padding-top: 15px;
-  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
 }
 
-button {
-  padding: 12px 25px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background-color: var(--primary-color);
-  color: var(--white);
-  font-weight: 600;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-button:hover:not(:disabled) {
-  background-color: #358a66;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-}
-
-button.cancelar {
-  background-color: #95a5a6;
-  text-transform: none;
-}
-button.cancelar:hover:not(:disabled) {
-  background-color: #7f8c8d;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-hr {
+/* --- Divisor --- */
+.divider {
   border: 0;
   height: 1px;
-  background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--border-color), rgba(0, 0, 0, 0));
-  margin: 30px 0;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-lg) 0;
 }
 
-/* --- Lista e Itens (.cliente-list) --- */
-.loading-message {
-  text-align: center;
-  color: var(--primary-color);
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 30px 0;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.8; }
-  50% { opacity: 1; }
-  100% { opacity: 0.8; }
-}
-
-.cliente-list { /* Estilo da lista principal */
+/* --- Lista de Itens --- */
+.crud-list {
   list-style: none;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: var(--spacing-md);
 }
-
-.cliente-list li {
-  display: flex;
-  justify-content: space-between;
+.list-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto; /* Info | Detalhes | Ações */
   align-items: center;
-  padding: 18px 20px;
-  background-color: var(--white);
-  border: 1px solid var(--border-color);
-  border-left: 6px solid var(--accent-color);
-  border-radius: 8px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.3s, transform 0.3s;
-}
-
-.cliente-list li:hover {
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.cliente-list li.cliente-inativo {
-  border-left-color: var(--danger-color);
-  opacity: 0.7;
-}
-
-.cliente-info {
-  flex-grow: 1;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 6px;
+  border-left-color: var(--color-accent); /* Padrão (Ativo) */
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
   cursor: pointer;
+}
+.list-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-left-color: var(--color-primary);
+}
+
+/* Status de Cor da Borda */
+.list-item.status-inactive {
+  border-left-color: var(--color-danger);
+  background-color: #fffafa;
+}
+.list-item.status-warning {
+  border-left-color: var(--color-warning);
+  background-color: #fffbeb;
+}
+
+.item-main-info {
   display: flex;
   align-items: center;
-  color: var(--secondary-color);
-  gap: 15px;
+  gap: var(--spacing-md);
+  overflow: hidden;
 }
-
-.cliente-info strong {
-  font-size: 1.15rem;
-  margin-right: 15px;
-  color: #2c3e50;
-}
-
 .id-tag {
-  background-color: #ecf0f1;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  margin-right: 15px;
-  color: #7f8c8d;
-  font-weight: 700;
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+.item-name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.cpf-cnpj, .email { /* Estilos para CPF/CNPJ e email na lista */
-    font-size: 1rem;
-    color: #555;
-    margin-left: 10px;
+.item-status {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-full);
+  text-transform: uppercase;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+}
+.item-status.warning {
+  background: var(--color-warning);
+  color: #4d2506;
 }
 
-.actions button {
-  margin-left: 10px;
-  padding: 8px 15px;
-  font-size: 0.95rem;
-  text-transform: none;
+.item-details {
+  display: flex;
+  gap: var(--spacing-sm);
 }
+.detail-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+/* Estilos específicos ClienteView */
+.detail-tag.doc { color: var(--color-secondary); background-color: #e5e7eb;}
+.detail-tag.email { color: var(--color-accent-dark); background-color: #eff6ff;}
+.detail-tag.phone { color: var(--color-primary-dark); background-color: var(--color-primary-light);}
 
-.actions .editar {
-  background-color: var(--accent-color);
+.item-actions {
+  display: flex;
+  gap: var(--spacing-sm);
 }
-.actions .editar:hover {
-  background-color: #2980b9;
+.btn-action {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  font-size: 1.1rem;
+  transition: all var(--transition-base);
 }
-
-.actions .excluir {
-  background-color: var(--danger-color);
+.btn-action:hover {
+  background-color: var(--color-background);
 }
-.actions .excluir:hover {
-  background-color: #c0392b;
-}
+.btn-edit:hover { color: var(--color-accent); }
+.btn-delete:hover { color: var(--color-danger); }
 
 /* --- Paginação --- */
 .paginator {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
-  margin-top: 40px;
-  font-size: 1.1rem;
-  color: var(--secondary-color);
-  font-weight: 500;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
 }
-
 .paginator button {
-  padding: 8px 18px;
-  font-size: 1rem;
-  background-color: #ecf0f1;
-  color: var(--secondary-color);
-  box-shadow: none;
-  text-transform: none;
+  font-weight: var(--font-weight-medium);
 }
 
-.paginator button:hover:not(:disabled) {
-  background-color: #bdc3c7;
-  transform: none;
-  box-shadow: none;
+/* --- Responsividade do CRUD --- */
+@media (max-width: 900px) {
+  /* Ajusta grid do formulário */
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .form-group.span-3, .form-group.span-4 { grid-column: span 2; }
+  
+  .list-item {
+     grid-template-columns: 1fr auto; /* Info | Ações */
+     gap: var(--spacing-sm);
+  }
+  .item-details {
+    grid-column: 1 / 2; /* Detalhes vão para baixo */
+    grid-row: 2 / 3;
+    flex-wrap: wrap;
+    margin-top: var(--spacing-sm); /* Espaço extra */
+  }
+  .item-actions {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3; /* Ocupa as duas "linhas" */
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4 { 
+    grid-template-columns: 1fr; /* Coluna única */
+  }
+  .form-group.span-2, .form-group.span-3, .form-group.span-4 {
+    grid-column: span 1;
+  }
+  .checkbox-group.align-end {
+    align-items: center;
+    padding-top: var(--spacing-sm);
+    padding-bottom: 0;
+  }
 }
 </style>

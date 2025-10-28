@@ -1,10 +1,8 @@
 <script setup>
 import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-
 const authStore = useAuthStore();
 const usuario = computed(() => authStore.user);
-
 const formatDate = (dateString) => {
   if (!dateString) return null;
   const date = new Date(dateString);
@@ -14,98 +12,162 @@ const formatDate = (dateString) => {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
   });
 };
 </script>
 
 <template>
-  <div class="container" v-if="usuario">
-    <h1>Informações do Usuário</h1>
-    <div class="user-info">
-      <img v-if="usuario.foto && usuario.foto.url" :src="usuario.foto.url" alt="Foto do usuário" class="user-photo" />
-      <img v-else src="https://via.placeholder.com/150" alt="Sem foto" class="user-photo" />
-
-      <p>Nome: <strong>{{ usuario.name }} </strong></p>
-      <p>Email: <strong>{{ usuario.email }}</strong></p>
-      <p>ID: <strong>{{ usuario.id }}</strong></p>
-      <p>Superuser: <strong> {{ usuario.is_superuser ? 'Sim' : 'Não' }}</strong></p>
-      <p>Ativo:<strong>  {{ usuario.is_active ? 'Sim' : 'Não' }}</strong></p>
-      <p>Staff: <strong> {{ usuario.is_staff ? 'Sim' : 'Não' }}</strong></p>
-      <p>Último Login: <strong> {{ formatDate(usuario.last_login) || 'Nunca logado' }}</strong></p>
-      <!-- <p>Grupos: <strong> {{ usuario.groups.join(', ') }}</strong></p> -->
-      <p>Grupos: <strong>{{ usuario.groups.map(group => group.name).join(', ') }}</strong></p>
-
+  <div class="profile-container">
+    <div v-if="usuario" class="profile-card">
+      <h1><span class="icon">👤</span> Informações do Usuário</h1>
+      <div class="profile-content">
+        <div class="profile-header">
+          <img 
+            v-if="usuario.foto && usuario.foto.url" 
+            :src="usuario.foto.url" 
+            alt="Foto" 
+            class="user-photo" 
+          />
+          <img 
+            v-else 
+            src="https://avatar.vercel.sh/user.svg?text=User"
+            alt="Foto" 
+            class="user-photo" 
+          />
+          <div class="user-identity">
+            <p class="user-name">{{ usuario.name }}</p>
+            <p class="user-email">{{ usuario.email }}</p>
+          </div>
+        </div>
+        
+        <div class="profile-details">
+          <div class="detail-item">
+            <span class="label">ID do Usuário</span>
+            <span class="value">{{ usuario.id }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Último Login</span>
+            <span class="value">{{ formatDate(usuario.last_login) || 'Nunca logado' }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Grupos</span>
+            <span class="value">
+               <span v-if="usuario.groups.length > 0" class="group-tags">
+                <span v-for="group in usuario.groups" :key="group.id" class="tag">
+                  {{ group.name }}
+                </span>
+              </span>
+              <span v-else>Nenhum grupo</span>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Permissões</span>
+            <span class="value permission-tags">
+              <span class="tag" v-if="usuario.is_superuser">Superuser</span>
+              <span class="tag" v-if="usuario.is_staff">Staff</span>
+              <span class="tag" v-if="usuario.is_active">Ativo</span>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="container" v-else>
-    <p>Carregando informações do usuário...</p>
+    <div v-else class="loading-message">
+      Carregando informações do usuário...
+    </div>
   </div>
 </template>
 
 <style scoped>
-body {
-  font-family: 'Arial', sans-serif;
-  background-color: #f4f4f9;
-  margin: 0;
-  padding: 0;
+.profile-container {
+  max-width: 800px;
+  margin: 0 auto;
 }
-
-.container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
+.profile-card {
+  padding: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 h1 {
-  font-size: 1.5rem;
-  color: #343a40;
-  margin-bottom: 30px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-light);
+}
+h1 .icon {
+  font-size: 2.2rem;
 }
 
-.user-info {
-  background-color: #fff;
-  padding: 30px;
-  border-radius: 10px;
-  max-width: 500px;
-  margin: 0 auto;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.profile-content {
+  padding: var(--spacing-md);
 }
 
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
 .user-photo {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  border-radius: var(--border-radius-full);
   object-fit: cover;
-  display: block;
-  margin: 0 auto 20px;
+  border: 4px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
+}
+.user-identity {
+  display: flex;
+  flex-direction: column;
+}
+.user-name {
+  font-size: var(--font-size-xxl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.user-email {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
 }
 
-p {
-  font-size: 1.1rem;
-  margin-bottom: 10px;
-  color: #555;
+.profile-details {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+.detail-item .label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+}
+.detail-item .value {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
-strong {
-  color: #333;
+.group-tags, .permission-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
 }
-
-@media (max-width: 600px) {
-  .user-info {
-    padding: 20px;
-  }
-
-  h1 {
-    font-size: 2rem;
-  }
-
-  p {
-    font-size: 1rem;
-  }
+.tag {
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 </style>

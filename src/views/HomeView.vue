@@ -3,29 +3,24 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProdutoStore } from '@/stores/produtoStore'
 import { useVendaStore } from '@/stores/vendaStore'
-
 const router = useRouter()
 const produtoStore = useProdutoStore()
 const vendaStore = useVendaStore()
-
 const metricas = ref({
   vendasHoje: 0,
   totalVendasHoje: 0,
   produtosBaixoEstoque: 0,
   vendasPendentes: 0
 })
-
 const produtosBaixoEstoque = ref([])
 const vendasRecentes = ref([])
 const isLoading = ref(true)
-
 const saudacao = computed(() => {
   const hora = new Date().getHours()
   if (hora < 12) return 'Bom dia'
   if (hora < 18) return 'Boa tarde'
   return 'Boa noite'
 })
-
 onMounted(async () => {
   isLoading.value = true
   try {
@@ -33,7 +28,6 @@ onMounted(async () => {
       produtoStore.getProdutos(1, '', '-id'),
       vendaStore.getVendas()
     ])
-    
     calcularMetricas()
   } catch (error) {
     console.error('Erro ao carregar dashboard:', error)
@@ -41,29 +35,39 @@ onMounted(async () => {
     isLoading.value = false
   }
 })
-
 function calcularMetricas() {
-  produtosBaixoEstoque.value = produtoStore.produtos
-    .filter(p => p.estoque_atual <= p.estoque_minimo && p.ativo)
-    .slice(0, 5)
+  const todosProdutos = produtoStore.produtos
+  const todasVendas = vendaStore.vendas
+  
+  // Métrica de Estoque Baixo (usando a contagem total, não apenas a primeira página)
+  // Idealmente, a API deveria fornecer isso.
+  // Vamos assumir que `getProdutos` busca todos por enquanto, ou usamos a meta.
+  // Para este exemplo, vamos filtrar os produtos já carregados.
+  produtosBaixoEstoque.value = todosProdutos
+    .filter(p => p.ativo && p.estoque_atual <= p.estoque_minimo)
   
   metricas.value.produtosBaixoEstoque = produtosBaixoEstoque.value.length
 
+  // Métricas de Vendas
   const hoje = new Date().toISOString().split('T')[0]
-  const vendasHoje = vendaStore.vendas.filter(v => {
+  const vendasHoje = todasVendas.filter(v => {
     const dataVenda = v.data_venda?.split('T')[0]
-    return dataVenda === hoje
+    return dataVenda === hoje && v.status === 'finalizada' // Apenas finalizadas
   })
   
   metricas.value.vendasHoje = vendasHoje.length
   metricas.value.totalVendasHoje = vendasHoje.reduce((sum, v) => sum + Number(v.total || 0), 0)
-  metricas.value.vendasPendentes = vendaStore.vendas.filter(v => v.status === 'pendente').length
+  metricas.value.vendasPendentes = todasVendas.filter(v => v.status === 'pendente').length
   
-  vendasRecentes.value = vendaStore.vendas.slice(0, 5)
+  // Listas
+  vendasRecentes.value = todasVendas.slice(0, 5)
+  produtosBaixoEstoque.value = produtosBaixoEstoque.value.slice(0, 5) // Limita a lista da UI
 }
-
 function navegarPara(rota) {
   router.push({ name: rota })
+}
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 </script>
 
@@ -71,7 +75,7 @@ function navegarPara(rota) {
   <div class="dashboard-container">
     <div class="dashboard-header">
       <h1>{{ saudacao }}! 👋</h1>
-      <p class="subtitle">Bem-vindo ao sistema de gestão do seu mercadinho</p>
+      <p class="subtitle">Bem-vindo ao painel de gestão do Mercadinho Loschicos.</p>
     </div>
 
     <div v-if="isLoading" class="loading-message">
@@ -80,39 +84,41 @@ function navegarPara(rota) {
 
     <div v-else class="dashboard-content">
       <section class="metricas-grid">
-        <div class="metrica-card vendas" @click="navegarPara('venda')">
-          <div class="metrica-icon">💰</div>
+        <div class="metrica-card" @click="navegarPara('venda')">
+          <div class="metrica-icon icon-vendas">💰</div>
           <div class="metrica-info">
-            <h3>Vendas Hoje</h3>
-            <p class="metrica-valor">{{ metricas.vendasHoje }}</p>
-            <p class="metrica-total">R$ {{ metricas.totalVendasHoje.toFixed(2) }}</p>
+            <p class="metrica-valor">{{ formatCurrency(metricas.totalVendasHoje) }}</p>
+            <h3>Total de Vendas (Hoje)</h3>
+            <p class="metrica-desc">{{ metricas.vendasHoje }} vendas finalizadas</p>
           </div>
         </div>
-
-        <div class="metrica-card estoque" @click="navegarPara('estoque')">
-          <div class="metrica-icon">📦</div>
+        
+        <div class="metrica-card" @click="navegarPara('estoque')">
+          <div class="metrica-icon icon-estoque">📦</div>
           <div class="metrica-info">
-            <h3>Estoque Baixo</h3>
-            <p class="metrica-valor alerta">{{ metricas.produtosBaixoEstoque }}</p>
-            <p class="metrica-desc">produtos precisam reposição</p>
+            <p class="metrica-valor" :class="{ 'alerta': metricas.produtosBaixoEstoque > 0 }">
+              {{ metricas.produtosBaixoEstoque }}
+            </p>
+            <h3>Produtos com Estoque Baixo</h3>
+            <p class="metrica-desc">Itens que precisam de reposição</p>
           </div>
         </div>
-
-        <div class="metrica-card pendentes" @click="navegarPara('venda')">
-          <div class="metrica-icon">⏳</div>
+        
+        <div class="metrica-card" @click="navegarPara('venda')">
+          <div class="metrica-icon icon-pendentes">⏳</div>
           <div class="metrica-info">
-            <h3>Vendas Pendentes</h3>
             <p class="metrica-valor">{{ metricas.vendasPendentes }}</p>
-            <p class="metrica-desc">aguardando finalização</p>
+            <h3>Vendas Pendentes</h3>
+            <p class="metrica-desc">Aguardando finalização ou pagamento</p>
           </div>
         </div>
 
-        <div class="metrica-card produtos" @click="navegarPara('produto')">
-          <div class="metrica-icon">🏷️</div>
+        <div class="metrica-card" @click="navegarPara('produto')">
+          <div class="metrica-icon icon-produtos">🏷️</div>
           <div class="metrica-info">
-            <h3>Total Produtos</h3>
-            <p class="metrica-valor">{{ produtoStore.produtos.length }}</p>
-            <p class="metrica-desc">cadastrados no sistema</p>
+            <p class="metrica-valor">{{ produtoStore.meta.total_items || produtoStore.produtos.length }}</p>
+            <h3>Produtos Ativos</h3>
+            <p class="metrica-desc">Total de itens cadastrados</p>
           </div>
         </div>
       </section>
@@ -120,69 +126,69 @@ function navegarPara(rota) {
       <section class="acoes-rapidas">
         <h2>Ações Rápidas</h2>
         <div class="acoes-grid">
-          <button class="acao-btn nova-venda" @click="navegarPara('venda')">
+          <button class="acao-btn" @click="navegarPara('caixa')">
             <span class="acao-icon">🛒</span>
-            <span>Nova Venda</span>
+            <span>Abrir Caixa (PDV)</span>
           </button>
-          <button class="acao-btn novo-produto" @click="navegarPara('produto')">
+          <button class="acao-btn" @click="navegarPara('produto')">
             <span class="acao-icon">➕</span>
             <span>Novo Produto</span>
           </button>
-          <button class="acao-btn estoque" @click="navegarPara('estoque')">
-            <span class="acao-icon">📊</span>
-            <span>Gerenciar Estoque</span>
+          <button class="acao-btn" @click="navegarPara('compra')">
+            <span class="acao-icon">🚚</span>
+            <span>Nova Compra</span>
           </button>
-          <button class="acao-btn relatorio" @click="navegarPara('relatorio')">
-            <span class="acao-icon">📈</span>
-            <span>Relatórios</span>
+          <button class="acao-btn" @click="navegarPara('estoque')">
+            <span class="acao-icon">📊</span>
+            <span>Ajustar Estoque</span>
           </button>
         </div>
       </section>
 
-      <div class="dashboard-grid">
-        <section class="dashboard-section estoque-baixo">
-          <div class="section-header">
-            <h2>⚠️ Estoque Baixo</h2>
-            <button class="ver-todos" @click="navegarPara('estoque')">Ver todos</button>
+      <div class="dashboard-grid-listas">
+        <section class="dashboard-lista-card">
+          <div class="lista-header">
+            <h2>⚠️ Alerta de Estoque Baixo</h2>
+            <button class="btn-ver-todos" @click="navegarPara('estoque')">Ver todos</button>
           </div>
           
           <div v-if="produtosBaixoEstoque.length === 0" class="empty-state">
-            <p>✅ Todos os produtos com estoque adequado!</p>
+            <p>✅ Nenhum produto com estoque baixo.</p>
           </div>
           
           <ul v-else class="lista-compacta">
-            <li v-for="produto in produtosBaixoEstoque" :key="produto.id" class="item-alerta">
+            <li v-for="produto in produtosBaixoEstoque" :key="produto.id">
               <div class="item-info">
                 <strong>{{ produto.nome }}</strong>
                 <span class="estoque-info">
-                  Estoque: <span class="estoque-valor">{{ produto.estoque_atual }}</span> / 
-                  Mínimo: {{ produto.estoque_minimo }}
+                  Atual: <span class="estoque-valor-alerta">{{ produto.estoque_atual }}</span>
+                  (Mín: {{ produto.estoque_minimo }})
                 </span>
               </div>
-              <button class="btn-repor" @click="navegarPara('compra')">Repor</button>
+              <button class="btn-acao-lista btn-repor" @click="navegarPara('compra')">Repor</button>
             </li>
           </ul>
         </section>
 
-        <section class="dashboard-section vendas-recentes">
-          <div class="section-header">
+        <section class="dashboard-lista-card">
+          <div class="lista-header">
             <h2>🕒 Vendas Recentes</h2>
-            <button class="ver-todos" @click="navegarPara('venda')">Ver todas</button>
+            <button class="btn-ver-todos" @click="navegarPara('venda')">Ver todas</button>
           </div>
           
           <div v-if="vendasRecentes.length === 0" class="empty-state">
-            <p>Nenhuma venda registrada ainda</p>
+            <p>Nenhuma venda registrada recentemente.</p>
           </div>
           
           <ul v-else class="lista-compacta">
             <li v-for="venda in vendasRecentes" :key="venda.id" class="item-venda">
-              <div class="item-info">
+              <div class="item-info-venda">
                 <strong>#{{ venda.id }}</strong>
                 <span class="venda-funcionario">{{ venda.funcionario_nome }}</span>
-                <span :class="`status-badge ${venda.status}`">{{ venda.status_display }}</span>
+                <span :class="`status-badge status-${venda.status}`">{{ venda.status_display }}</span>
               </div>
               <div class="item-valor">
-                <span class="valor">R$ {{ Number(venda.total || 0).toFixed(2) }}</span>
+                <span class="valor">{{ formatCurrency(venda.total) }}</span>
               </div>
             </li>
           </ul>
@@ -196,209 +202,161 @@ function navegarPara(rota) {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 30px 20px;
-  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 .dashboard-header {
-  margin-bottom: 40px;
-  text-align: center;
+  margin-bottom: var(--spacing-xl);
 }
-
 .dashboard-header h1 {
-  font-size: 2.5rem;
-  color: #2c3e50;
-  margin-bottom: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-display);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-xs);
 }
-
 .subtitle {
-  font-size: 1.1rem;
-  color: #7f8c8d;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
 }
 
-.loading-message {
-  text-align: center;
-  color: #41b883;
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin: 60px 0;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 1; }
-}
-
+/* --- Métricas --- */
 .metricas-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 40px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xxl);
 }
-
 .metrica-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-radius: 16px;
-  padding: 25px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
   display: flex;
   align-items: center;
-  gap: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  gap: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
+  transition: all var(--transition-base);
+  border: 1px solid var(--color-border-light);
 }
-
 .metrica-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
 }
-
-.metrica-card.vendas { border-color: #41b883; }
-.metrica-card.estoque { border-color: #f39c12; }
-.metrica-card.pendentes { border-color: #3498db; }
-.metrica-card.produtos { border-color: #9b59b6; }
-
 .metrica-icon {
-  font-size: 3rem;
+  font-size: 2.5rem;
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
   line-height: 1;
 }
+/* Fundos coloridos sutis para os ícones */
+.icon-vendas   { background-color: var(--color-primary-light); color: var(--color-primary-dark); }
+.icon-estoque  { background-color: #fffbeb; color: #b45309; }
+.icon-pendentes{ background-color: #eff6ff; color: #2563eb; }
+.icon-produtos { background-color: #f3e8ff; color: #7e22ce; }
 
 .metrica-info h3 {
-  font-size: 0.95rem;
-  color: #7f8c8d;
-  margin: 0 0 8px 0;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--spacing-xs) 0;
+  font-weight: var(--font-weight-medium);
 }
-
 .metrica-valor {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #2c3e50;
-  margin: 0;
+  font-size: var(--font-size-xxl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
   line-height: 1;
 }
-
 .metrica-valor.alerta {
-  color: #e74c3c;
+  color: var(--color-danger);
 }
-
-.metrica-total {
-  font-size: 1.1rem;
-  color: #27ae60;
-  font-weight: 600;
-  margin: 5px 0 0 0;
-}
-
 .metrica-desc {
-  font-size: 0.9rem;
-  color: #95a5a6;
-  margin: 5px 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 
+/* --- Ações Rápidas --- */
 .acoes-rapidas {
-  margin-bottom: 40px;
+  margin-bottom: var(--spacing-xxl);
 }
-
 .acoes-rapidas h2 {
-  font-size: 1.5rem;
-  color: #2c3e50;
-  margin-bottom: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
 }
-
 .acoes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
+  gap: var(--spacing-md);
 }
-
 .acao-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  background: white;
-  font-size: 1.1rem;
-  font-weight: 600;
+  justify-content: flex-start; /* Alinha à esquerda */
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.3s ease;
-  color: #2c3e50;
+  transition: all var(--transition-base);
+  color: var(--color-text-primary);
+  text-align: left;
 }
-
 .acao-btn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+  background: var(--color-surface);
 }
-
-.acao-btn.nova-venda:hover { border-color: #41b883; background: #f0fdf4; }
-.acao-btn.novo-produto:hover { border-color: #3498db; background: #eff6ff; }
-.acao-btn.estoque:hover { border-color: #f39c12; background: #fffbeb; }
-.acao-btn.relatorio:hover { border-color: #9b59b6; background: #faf5ff; }
-
 .acao-icon {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
 }
 
-.dashboard-grid {
+/* --- Listas do Dashboard --- */
+.dashboard-grid-listas {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: var(--spacing-lg);
 }
-
-.dashboard-section {
-  background: white;
-  border-radius: 16px;
-  padding: 25px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+.dashboard-lista-card {
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
 }
-
-.section-header {
+.lista-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
 }
-
-.section-header h2 {
-  font-size: 1.3rem;
-  color: #2c3e50;
+.lista-header h2 {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
-
-.ver-todos {
+.btn-ver-todos {
   background: transparent;
   border: none;
-  color: #3498db;
-  font-weight: 600;
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  padding: 8px 15px;
-  border-radius: 6px;
-  transition: all 0.2s;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-base);
   text-transform: none;
-  font-size: 0.95rem;
+  font-size: var(--font-size-sm);
 }
-
-.ver-todos:hover {
-  background: #eff6ff;
-  transform: none;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px 20px;
-  color: #95a5a6;
-  font-size: 1.1rem;
+.btn-ver-todos:hover {
+  background: var(--color-background);
 }
 
 .lista-compacta {
@@ -407,115 +365,112 @@ function navegarPara(rota) {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
-
 .lista-compacta li {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 10px;
-  transition: all 0.2s;
+  padding: var(--spacing-md);
+  background: var(--color-background);
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-base);
 }
-
 .lista-compacta li:hover {
-  background: #e9ecef;
-  transform: translateX(5px);
+  background: #eef1f4;
+  transform: translateX(4px);
 }
-
-.item-alerta {
-  border-left: 4px solid #e74c3c;
-}
-
 .item-info {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--spacing-xs);
 }
-
 .item-info strong {
-  font-size: 1.05rem;
-  color: #2c3e50;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
-
 .estoque-info {
-  font-size: 0.9rem;
-  color: #7f8c8d;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
-
-.estoque-valor {
-  font-weight: 700;
-  color: #e74c3c;
+.estoque-valor-alerta {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-danger);
 }
-
-.btn-repor {
-  background: #41b883;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+.btn-acao-lista {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
   text-transform: none;
-  font-size: 0.9rem;
+  border: none;
+  border-radius: var(--border-radius-md);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
 }
-
+.btn-repor {
+  background-color: var(--color-warning);
+  color: #4d2506;
+}
 .btn-repor:hover {
-  background: #358a66;
-  transform: scale(1.05);
+  background-color: #d97706;
+  color: var(--color-text-inverse);
 }
 
-.item-venda .item-info {
-  flex-direction: row;
+/* Lista de Vendas */
+.item-venda {
   align-items: center;
-  gap: 15px;
 }
-
+.item-info-venda {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+.item-info-venda strong {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+}
 .venda-funcionario {
-  font-size: 0.95rem;
-  color: #7f8c8d;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
 }
-
 .status-badge {
   padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border-radius: var(--border-radius-full);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
 }
-
-.status-badge.pendente {
-  background: #fef0cd;
-  color: #f39c12;
+.status-badge.status-pendente {
+  background: #fffbeb;
+  color: #b45309;
 }
-
-.status-badge.finalizada {
-  background: #d4edda;
-  color: #27ae60;
+.status-badge.status-finalizada {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
 }
-
-.status-badge.cancelada {
-  background: #f8d7da;
-  color: #e74c3c;
+.status-badge.status-cancelada {
+  background: #fff5f5;
+  color: #c0392b;
 }
-
 .item-valor .valor {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #27ae60;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
 }
 
 @media (max-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-  
   .metricas-grid {
     grid-template-columns: 1fr;
   }
-  
+  .dashboard-grid-listas {
+    grid-template-columns: 1fr;
+  }
   .acoes-grid {
     grid-template-columns: 1fr;
   }

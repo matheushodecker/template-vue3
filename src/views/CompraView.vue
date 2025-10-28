@@ -1,671 +1,775 @@
 <script setup>
 import { reactive, onMounted, ref, computed } from 'vue'
-import { useCompraStore } from '@/stores/compraStore' 
-
+import { useCompraStore } from '@/stores/compraStore'
 const compraStore = useCompraStore()
-
-// --- ESTADO DE CONTROLE ---
-const formAberto = ref(false) 
-const itemIndexToEdit = ref(null) 
-
-// Status (do modelo Django)
+const formAberto = ref(false)
+const itemIndexToEdit = ref(null)
 const STATUS_OPTIONS = [
-    { value: 'P', label: 'Pendente' },
-    { value: 'A', label: 'Aprovada' },
-    { value: 'R', label: 'Recebida' },
-    { value: 'C', label: 'Cancelada' },
+  { value: 'P', label: 'Pendente' }, { value: 'A', label: 'Aprovada' },
+  { value: 'R', label: 'Recebida' }, { value: 'C', label: 'Cancelada' },
 ];
-
-// --- ESTADO DO FORMULÁRIO (Mestre) ---
-const defaultCompra = { 
-    id: null, 
-    numero_pedido: '',
-    fornecedor: null, // FK ID
-    funcionario: null, // FK ID
-    data_entrega_prevista: null, // Obrigatório
-    data_entrega_real: null, // Opcional
-    desconto: 0.00,
-    frete: 0.00,
-    status: 'P', // Default: Pendente
-    observacoes: null,
-    itens: [], // Array de ItemCompra
+const defaultCompra = {
+  id: null, numero_pedido: '', fornecedor: null, funcionario: null,
+  data_entrega_prevista: null, data_entrega_real: null, desconto: 0.00,
+  frete: 0.00, status: 'P', observacoes: null, itens: [],
 }
 const compra = reactive({ ...defaultCompra })
-
-// --- ESTADO DO ITEM (Detalhe) ---
-const defaultItem = {
-    produto: null, // FK ID
-    quantidade: 1,
-    preco_unitario: 0.00, // Preço de compra
-}
+const defaultItem = { produto: null, quantidade: 1, preco_unitario: 0.00 }
 const itemAtual = reactive({ ...defaultItem })
 
-// --- COMPUTED PROPERTIES ---
-
-// Calcula o subtotal de um item
 const subtotalItemAtual = computed(() => {
-    return (itemAtual.quantidade || 0) * (itemAtual.preco_unitario || 0);
+  return (itemAtual.quantidade || 0) * (itemAtual.preco_unitario || 0);
 });
-
-// Calcula o total bruto da compra (soma de todos os subtotais)
 const subtotalItensCompra = computed(() => {
-    return compra.itens.reduce((sum, item) => sum + item.subtotal, 0);
+  return compra.itens.reduce((sum, item) => sum + item.subtotal, 0);
 });
-
-// Calcula o valor final da compra
 const valorFinalCompra = computed(() => {
-    const totalBruto = subtotalItensCompra.value;
-    const frete = Number(compra.frete || 0);
-    const desconto = Number(compra.desconto || 0);
-    return totalBruto + frete - desconto;
+  const totalBruto = subtotalItensCompra.value;
+  const frete = Number(compra.frete || 0);
+  const desconto = Number(compra.desconto || 0);
+  return totalBruto + frete - desconto;
 });
 
-
-// --- CICLO DE VIDA E FUNÇÕES BÁSICAS ---
 onMounted(async () => {
-    await Promise.all([
-        compraStore.getCompras(),
-        compraStore.loadDependencies()
-    ]);
+  await Promise.all([ compraStore.getCompras(), compraStore.loadDependencies() ]);
 })
-
 function limpar() {
-    Object.assign(compra, { ...defaultCompra })
-    Object.assign(itemAtual, { ...defaultItem })
-    itemIndexToEdit.value = null;
-    formAberto.value = false
+  Object.assign(compra, { ...defaultCompra, itens: [] }) // Limpa itens também
+  Object.assign(itemAtual, { ...defaultItem })
+  itemIndexToEdit.value = null;
+  formAberto.value = false
 }
-
-// Função auxiliar para checar se o campo está vazio
 function isFieldEmpty(value) {
-    if (typeof value === 'string') return value.trim() === '';
-    return value === null || value === undefined;
+  if (typeof value === 'string') return value.trim() === '';
+  return value === null || value === undefined;
 }
-
-
-// --- Funções de Gestão de Itens ---
-
 function adicionarOuAtualizarItem() {
-    if (!itemAtual.produto || itemAtual.quantidade < 1 || itemAtual.preco_unitario === null) {
-        alert("Selecione o Produto, Quantidade e Preço Unitário para adicionar o item.");
+  if (!itemAtual.produto || itemAtual.quantidade < 1 || itemAtual.preco_unitario === null) {
+    alert("Selecione o Produto, Quantidade e Preço Unitário.");
+    return;
+  }
+  const produtoSelecionado = compraStore.produtosDisponiveis.find(p => p.id === itemAtual.produto);
+  const novoItem = {
+    ...itemAtual,
+    subtotal: subtotalItemAtual.value,
+    produto_nome: produtoSelecionado?.nome || 'Desconhecido'
+  };
+  if (itemIndexToEdit.value !== null) {
+    compra.itens.splice(itemIndexToEdit.value, 1, novoItem);
+  } else {
+     // Previne duplicatas
+    const exists = compra.itens.some(p => p.produto === novoItem.produto);
+    if (exists) {
+        alert(`O produto "${novoItem.produto_nome}" já está na lista.`);
         return;
     }
-
-    const produtoSelecionado = compraStore.produtosDisponiveis.find(p => p.id === itemAtual.produto);
-
-    const novoItem = {
-        ...itemAtual,
-        subtotal: subtotalItemAtual.value,
-        produto_nome: produtoSelecionado?.nome || 'Produto Desconhecido'
-    };
-
-    if (itemIndexToEdit.value !== null) {
-        compra.itens.splice(itemIndexToEdit.value, 1, novoItem);
-    } else {
-        compra.itens.push(novoItem);
-    }
-
-    Object.assign(itemAtual, { ...defaultItem });
-    itemIndexToEdit.value = null;
+    compra.itens.push(novoItem);
+  }
+  Object.assign(itemAtual, { ...defaultItem });
+  itemIndexToEdit.value = null;
 }
-
 function editarItem(item, index) {
-    Object.assign(itemAtual, item);
-    itemIndexToEdit.value = index;
+  Object.assign(itemAtual, item);
+  itemIndexToEdit.value = index;
 }
-
 function removerItem(index) {
-    if (confirm("Tem certeza que deseja remover este item da lista?")) {
-        compra.itens.splice(index, 1);
-    }
+  if (confirm("Remover este item?")) {
+    compra.itens.splice(index, 1);
+     if (index === itemIndexToEdit.value) { // Limpa se estava editando o removido
+         Object.assign(itemAtual, { ...defaultItem });
+         itemIndexToEdit.value = null;
+     }
+  }
 }
-
-// --- Funções de CRUD da Compra ---
-
 async function salvar() {
-    if (isFieldEmpty(compra.numero_pedido) || !compra.fornecedor || !compra.funcionario || !compra.data_entrega_prevista || compra.itens.length === 0) 
-    {
-        alert("Número do Pedido, Fornecedor, Funcionário, Data de Entrega Prevista e pelo menos um item são obrigatórios.")
-        return
-    }
-    
-    const dadosParaEnviar = { 
-        ...compra, 
-        valor_total: valorFinalCompra.value, // Inclui o total final calculado
-        
-        // CORREÇÃO CRÍTICA: Trata campos opcionais de Data/Texto que podem ser vazios ("")
-        data_entrega_real: isFieldEmpty(compra.data_entrega_real) ? null : compra.data_entrega_real,
-        observacoes: isFieldEmpty(compra.observacoes) ? null : compra.observacoes,
-
-        itens: compra.itens.map(item => ({
-             // Remove o campo produto_nome (read-only no Serializer)
-            produto: item.produto,
-            quantidade: item.quantidade,
-            preco_unitario: item.preco_unitario,
-        }))
-    };
-    
-    await compraStore.salvarCompra(dadosParaEnviar)
-    limpar()
+  if (isFieldEmpty(compra.numero_pedido) || !compra.fornecedor || !compra.funcionario || !compra.data_entrega_prevista || compra.itens.length === 0) {
+    alert("Nº Pedido, Fornecedor, Funcionário, Data Prevista e ao menos um item são obrigatórios.")
+    return
+  }
+  const dadosParaEnviar = {
+    ...compra,
+    valor_total: valorFinalCompra.value,
+    data_entrega_real: isFieldEmpty(compra.data_entrega_real) ? null : compra.data_entrega_real,
+    observacoes: isFieldEmpty(compra.observacoes) ? null : compra.observacoes,
+    itens: compra.itens.map(item => ({
+      produto: item.produto, quantidade: item.quantidade, preco_unitario: item.preco_unitario,
+    }))
+  };
+  await compraStore.salvarCompra(dadosParaEnviar)
+  limpar()
 }
-
 function editar(compra_para_editar) {
-    // Formatação das datas para input type="date"
-    const dataEntregaPrevistaFormatada = compra_para_editar.data_entrega_prevista ? 
-                                         compra_para_editar.data_entrega_prevista.substring(0, 10) : null;
-    const dataEntregaRealFormatada = compra_para_editar.data_entrega_real ? 
-                                     compra_para_editar.data_entrega_real.substring(0, 10) : null;
-    
-    Object.assign(compra, { 
-        ...compra_para_editar,
-        // data_pedido é read-only
-        data_entrega_prevista: dataEntregaPrevistaFormatada,
-        data_entrega_real: dataEntregaRealFormatada,
-    })
-    formAberto.value = true
+  const dataEntregaPrevistaFormatada = compra_para_editar.data_entrega_prevista ? compra_para_editar.data_entrega_prevista.substring(0, 10) : null;
+  const dataEntregaRealFormatada = compra_para_editar.data_entrega_real ? compra_para_editar.data_entrega_real.substring(0, 10) : null;
+  Object.assign(compra, {
+    ...compra_para_editar,
+    data_entrega_prevista: dataEntregaPrevistaFormatada,
+    data_entrega_real: dataEntregaRealFormatada,
+    // Garante que 'itens' seja uma cópia reativa, se necessário
+    itens: JSON.parse(JSON.stringify(compra_para_editar.itens || []))
+  })
+  formAberto.value = true
 }
-
 async function excluir(id) {
-    if (confirm("Tem certeza que deseja excluir esta Compra?")) {
-        await compraStore.excluirCompra(id)
-        limpar()
-    }
+  if (confirm("Excluir esta Compra?")) {
+    await compraStore.excluirCompra(id)
+    limpar()
+  }
 }
-
 function toggleForm() {
-    if (formAberto.value) {
-        limpar(); 
-    } else {
-        formAberto.value = true;
+  if (formAberto.value) { limpar(); }
+  else { formAberto.value = true; }
+}
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function formatDate(isoString) {
+    if (!isoString) return 'N/A';
+    try {
+        const date = new Date(isoString);
+        // Adiciona verificação para datas inválidas que podem vir da API
+        if (isNaN(date.getTime())) return 'Data inválida';
+        // Formata para dd/mm/aaaa
+        return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    } catch (e) {
+        return 'Data inválida';
     }
 }
 </script>
 
 <template>
-  <div class="container">
-    <h1>Gestão de Compras</h1>
+  <div class="crud-container">
+    <h1><span class="icon">🚚</span> Gestão de Compras</h1>
 
-    <div class="form-toggle">
-        <button 
-            @click="toggleForm"
-            :class="{ 'cancelar': formAberto }"
-        >
-            {{ compra.id ? 'Editar Compra' : formAberto ? 'Fechar Formulário' : 'Nova Compra' }}
-        </button>
+    <div class="crud-header">
+       <button class="btn btn-primary" @click="toggleForm">
+        {{ formAberto ? 'Fechar Formulário' : 'Nova Compra' }}
+      </button>
     </div>
 
-    <form class="form-container" @submit.prevent="salvar" v-if="formAberto">
+    <div class="form-container" v-if="formAberto">
       <h2>{{ compra.id ? `Editar Compra #${compra.numero_pedido}` : 'Nova Compra' }}</h2>
+      <form @submit.prevent="salvar">
 
-      <section>
-        <h3>Dados do Pedido</h3>
-        <div class="form-group-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
-          <div>
-            <label for="numeroPedido">Nº Pedido*</label>
-            <input id="numeroPedido" type="text" v-model="compra.numero_pedido" required placeholder="Ex: PO-2025-001" />
-          </div>
-          <div>
-            <label for="fornecedor">Fornecedor*</label>
-            <select id="fornecedor" v-model="compra.fornecedor" required>
-              <option :value="null" disabled>Selecione o Fornecedor</option>
-              <option v-for="f in compraStore.fornecedoresDisponiveis" :key="f.id" :value="f.id">
-                {{ f.nome }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label for="funcionario">Funcionário*</label>
-            <select id="funcionario" v-model="compra.funcionario" required>
-              <option :value="null" disabled>Selecione o Funcionário</option>
-              <option v-for="f in compraStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
-                {{ f.nome }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label for="dataEntregaPrevista">Entrega Prevista*</label>
-            <input id="dataEntregaPrevista" type="date" v-model="compra.data_entrega_prevista" required />
-          </div>
-          <div>
-            <label for="dataEntregaReal">Entrega Real</label>
-            <input id="dataEntregaReal" type="date" v-model="compra.data_entrega_real" />
-          </div>
-        </div>
-      </section>
-      
-      <section>
-        <h3>Itens e Custos</h3>
-
-        <div class="form-group-grid item-input-row" style="grid-template-columns: 2fr 1fr 1fr 1fr 50px;">
-            <div>
-                <label for="produtoItem">Produto</label>
-                <select id="produtoItem" v-model="itemAtual.produto">
-                    <option :value="null" disabled>Selecione o Produto</option>
-                    <option v-for="p in compraStore.produtosDisponiveis" :key="p.id" :value="p.id">
-                        {{ p.nome }} (Custo Ref: R$ {{ p.preco_custo }})
-                    </option>
+        <section class="form-section">
+          <h3>Dados do Pedido</h3>
+          <div class="form-grid grid-cols-3">
+             <div class="form-group">
+              <label for="numeroPedido">Nº Pedido*</label>
+              <input id="numeroPedido" type="text" v-model="compra.numero_pedido" required placeholder="Ex: PO-2025-001" />
+            </div>
+            <div class="form-group">
+              <label for="fornecedor">Fornecedor*</label>
+              <select id="fornecedor" v-model="compra.fornecedor" required>
+                <option :value="null" disabled>Selecione</option>
+                <option v-for="f in compraStore.fornecedoresDisponiveis" :key="f.id" :value="f.id">
+                  {{ f.nome }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="funcionario">Funcionário Responsável*</label>
+              <select id="funcionario" v-model="compra.funcionario" required>
+                <option :value="null" disabled>Selecione</option>
+                <option v-for="f in compraStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
+                  {{ f.nome }}
+                </option>
+              </select>
+            </div>
+             <div class="form-group">
+              <label for="dataEntregaPrevista">Entrega Prevista*</label>
+              <input id="dataEntregaPrevista" type="date" v-model="compra.data_entrega_prevista" required />
+            </div>
+            <div class="form-group">
+              <label for="dataEntregaReal">Entrega Real</label>
+              <input id="dataEntregaReal" type="date" v-model="compra.data_entrega_real" />
+            </div>
+             <div class="form-group">
+               <label for="status">Status</label>
+                <select id="status" v-model="compra.status" required>
+                  <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
+                    {{ s.label }}
+                  </option>
                 </select>
             </div>
-            <div>
-                <label for="quantidade">Qtd.</label>
-                <input id="quantidade" type="number" v-model.number="itemAtual.quantidade" min="1" placeholder="1" />
+          </div>
+        </section>
+
+        <section class="form-section">
+          <h3>Itens e Custos</h3>
+          <div class="item-input-row form-grid grid-cols-5">
+             <div class="form-group span-2">
+              <label for="produtoItem">Produto</label>
+              <select id="produtoItem" v-model="itemAtual.produto">
+                <option :value="null" disabled>Selecione</option>
+                 <option v-for="p in compraStore.produtosDisponiveis.filter(prod => !compra.itens.some(item => item.produto === prod.id) || itemAtual.produto === prod.id)" :key="p.id" :value="p.id">
+                  {{ p.nome }} (Custo Ref: {{ formatCurrency(p.preco_custo) }})
+                </option>
+              </select>
             </div>
-            <div>
-                <label for="precoUnitario">Preço Unitário Custo</label>
-                <input id="precoUnitario" type="number" step="0.01" v-model.number="itemAtual.preco_unitario" placeholder="0.00" />
+             <div class="form-group">
+              <label for="quantidade">Qtd.</label>
+              <input id="quantidade" type="number" v-model.number="itemAtual.quantidade" min="1" placeholder="1" />
             </div>
-            <div>
-                <label>Subtotal Item</label>
-                <input type="text" :value="subtotalItemAtual.toFixed(2)" disabled class="subtotal-input" />
+            <div class="form-group">
+              <label for="precoUnitario">Custo Unit.</label>
+              <input id="precoUnitario" type="number" step="0.01" v-model.number="itemAtual.preco_unitario" placeholder="0,00" />
             </div>
-            <div class="action-item-button">
-                <button type="button" @click="adicionarOuAtualizarItem" :disabled="!itemAtual.produto">
-                    {{ itemIndexToEdit !== null ? '🖊️' : '➕' }}
-                </button>
+             <div class="form-group action-item-button align-end">
+              <button type="button" @click="adicionarOuAtualizarItem" :disabled="!itemAtual.produto" class="btn btn-accent">
+                {{ itemIndexToEdit !== null ? 'Atualizar' : 'Adicionar' }}
+              </button>
             </div>
+          </div>
+
+           <div class="item-list-container" v-if="compra.itens.length > 0">
+               <h4>Itens do Pedido ({{ compra.itens.length }})</h4>
+               <table class="item-table">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Qtd</th>
+                      <th>Custo Unit.</th>
+                      <th>Subtotal</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, index) in compra.itens" :key="index">
+                      <td>{{ item.produto_nome }}</td>
+                      <td>{{ item.quantidade }}</td>
+                      <td>{{ formatCurrency(item.preco_unitario) }}</td>
+                      <td>{{ formatCurrency(item.subtotal) }}</td>
+                      <td>
+                        <button type="button" @click="editarItem(item, index)" class="btn-action-table edit">Editar</button>
+                        <button type="button" @click="removerItem(index)" class="btn-action-table delete">Remover</button>
+                      </td>
+                    </tr>
+                  </tbody>
+               </table>
+           </div>
+           <div v-else class="empty-state item-empty">
+               <p>Adicione produtos a esta compra usando o formulário acima.</p>
+           </div>
+
+           <div class="finance-summary form-grid grid-cols-3">
+               <div class="form-group">
+                  <label for="frete">Frete (R$)</label>
+                  <input id="frete" type="number" step="0.01" v-model.number="compra.frete" placeholder="0,00" />
+               </div>
+               <div class="form-group">
+                  <label for="desconto">Desconto (R$)</label>
+                  <input id="desconto" type="number" step="0.01" v-model.number="compra.desconto" placeholder="0,00" :max="subtotalItensCompra + (compra.frete || 0)" />
+               </div>
+               <div class="totals-display">
+                  <p>Subtotal Itens: <strong>{{ formatCurrency(subtotalItensCompra) }}</strong></p>
+                  <p>Frete: <strong>+ {{ formatCurrency(compra.frete) }}</strong></p>
+                  <p class="desconto-valor">Desconto: <strong>- {{ formatCurrency(compra.desconto) }}</strong></p>
+                  <p class="valor-final">Total Pedido: <strong>{{ formatCurrency(valorFinalCompra) }}</strong></p>
+               </div>
+           </div>
+        </section>
+
+         <section class="form-section">
+           <h3>Observações</h3>
+           <div class="form-group">
+              <label for="observacoes">Observações Gerais</label>
+              <textarea id="observacoes" v-model="compra.observacoes" rows="3"></textarea>
+            </div>
+        </section>
+
+        <div class="form-actions">
+           <button type="button" @click="limpar" class="btn btn-light" :disabled="compraStore.isLoading">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" :disabled="compraStore.isLoading || compra.itens.length === 0">
+            {{ compra.id ? 'Atualizar Compra' : 'Salvar Compra' }}
+          </button>
         </div>
-
-        <div class="resumo-grid">
-            <div class="lista-itens-wrapper">
-                <h4>Itens do Pedido ({{ compra.itens.length }})</h4>
-                <table v-if="compra.itens.length > 0" class="itens-compra-table">
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th>Qtd</th>
-                            <th>Custo Unit.</th>
-                            <th>Subtotal</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(item, index) in compra.itens" :key="index">
-                            <td>{{ item.produto_nome }}</td>
-                            <td>{{ item.quantidade }}</td>
-                            <td>R$ {{ Number(item.preco_unitario).toFixed(2) }}</td>
-                            <td>R$ {{ Number(item.subtotal).toFixed(2) }}</td>
-                            <td>
-                                <button type="button" @click="editarItem(item, index)" class="editar-item">Editar</button>
-                                <button type="button" @click="removerItem(index)" class="remover-item">Remover</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p v-else class="alerta-vazio">Adicione produtos a esta compra.</p>
-            </div>
-
-            <div class="totais-compra">
-                <h4>Resumo Financeiro</h4>
-                <div class="totais-campos">
-                    <label for="status">Status</label>
-                    <select id="status" v-model="compra.status" required>
-                      <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
-                        {{ s.label }}
-                      </option>
-                    </select>
-
-                    <label for="frete">Frete (R$)</label>
-                    <input id="frete" type="number" step="0.01" v-model.number="compra.frete" placeholder="0.00" />
-                    
-                    <label for="desconto">Desconto (R$)</label>
-                    <input id="desconto" type="number" step="0.01" v-model.number="compra.desconto" placeholder="0.00" />
-                </div>
-                
-                <div class="totais-resumo">
-                    <p>Total Itens:</p>
-                    <p>R$ {{ subtotalItensCompra.toFixed(2) }}</p>
-
-                    <p>Frete (+):</p>
-                    <p>R$ {{ Number(compra.frete || 0).toFixed(2) }}</p>
-                    
-                    <p>Desconto (-):</p>
-                    <p>R$ {{ Number(compra.desconto || 0).toFixed(2) }}</p>
-
-                    <p class="valor-final-label">Valor Total:</p>
-                    <p class="valor-final">R$ {{ valorFinalCompra.toFixed(2) }}</p>
-                </div>
-            </div>
-        </div>
-      </section>
-      
-      <div class="form-group-full">
-        <div>
-            <label for="observacoes">Observações</label>
-            <textarea id="observacoes" v-model="compra.observacoes"></textarea>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button type="submit" :disabled="compraStore.isLoading || compra.itens.length === 0">
-          {{ compra.id ? 'Atualizar' : 'Salvar' }} Compra
-        </button>
-        <button type="button" @click="limpar" class="cancelar" :disabled="compraStore.isLoading">
-          Cancelar
-        </button>
-      </div>
-    </form>
-    
-    <hr>
-    
-    <div v-if="compraStore.isLoading" class="loading-message">
-        Carregando compras...
+      </form>
     </div>
 
-    <ul class="compra-list" v-else>
-      <li v-for="c in compraStore.compras" :key="c.id" :class="`compra-status-${c.status}`">
-        <span class="compra-info" @click="editar(c)">
+    <hr class="divider" />
+
+    <div v-if="compraStore.isLoading" class="loading-message">
+      Carregando compras...
+    </div>
+     <div v-else-if="compraStore.compras.length === 0" class="empty-state">
+      <p>Nenhuma compra encontrada.</p>
+    </div>
+    <ul class="crud-list" v-else>
+      <li
+        v-for="c in compraStore.compras"
+        :key="c.id"
+        class="list-item"
+        :class="`status-${c.status}`" @click="editar(c)"
+      >
+        <div class="item-main-info compra-info">
           <span class="id-tag">#{{ c.id }}</span>
-          <strong>Pedido {{ c.numero_pedido }}</strong> 
-          <span class="fornecedor">{{ c.fornecedor_nome }}</span>
-          <span class="status-tag">{{ c.status_display }}</span>
-          <span class="total">R$ {{ Number(c.valor_total || 0).toFixed(2) }}</span>
-          <span class="data">Prev. Entrega: {{ c.data_entrega_prevista }}</span>
-        </span>
-        <div class="actions">
-          <button @click="editar(c)" class="editar">Detalhes/Editar</button>
-          <button @click="excluir(c.id)" class="excluir">Excluir</button>
+          <span class="item-name">Pedido {{ c.numero_pedido }}</span>
+           <span :class="`item-status status-${c.status}`">{{ c.status_display }}</span>
+        </div>
+
+        <div class="item-details compra-details">
+            <span class="detail-tag fornecedor">Fornecedor: {{ c.fornecedor_nome }}</span>
+            <span class="detail-tag date">Previsto: {{ formatDate(c.data_entrega_prevista) }}</span>
+            <span class="detail-tag total">{{ formatCurrency(c.valor_total) }}</span>
+        </div>
+
+        <div class="item-actions">
+           <button @click.stop="editar(c)" class="btn-action btn-edit" title="Detalhes/Editar">✏️</button>
+           <button @click.stop="excluir(c.id)" class="btn-action btn-delete" title="Excluir">🗑️</button>
         </div>
       </li>
     </ul>
 
+     <div class="paginator" v-if="!compraStore.isLoading && compraStore.meta.total_pages > 1">
+       <button class="btn btn-light" :disabled="compraStore.meta.page <= 1" @click="compraStore.paginaAnterior">Anterior</button>
+      <span>Página {{ compraStore.meta.page }} de {{ compraStore.meta.total_pages }}</span>
+      <button class="btn btn-light" :disabled="compraStore.meta.page >= compraStore.meta.total_pages" @click="compraStore.proximaPagina">Próxima</button>
     </div>
+
+  </div>
 </template>
+
 <style scoped>
-/* Variáveis para fácil manutenção de cores */
-:root {
-  --primary-color: #41b883; /* Vue Green */
-  --secondary-color: #34495e; /* Dark Blue/Gray */
-  --accent-color: #3498db; /* Blue for Edit */
-  --danger-color: #e74c3c; /* Red for Delete/Cancelada */
-  --success-color: #2ecc71; /* Green para Recebida */
-  --pending-color: #f39c12; /* Yellow/Orange para Pendente */
-  --approved-color: #8e44ad; /* Roxo para Aprovada */
-  --light-bg: #f7f9fb;
-  --white: #ffffff;
-  --border-color: #e0e0e0;
+/* --- Container Principal --- */
+.crud-container {
+  max-width: 1200px; /* Ajustado para Compra */
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
-.container {
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 40px;
-  background-color: var(--white);
-  border-radius: 12px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* --- Títulos e Headers --- */
 h1 {
-  text-align: center;
-  color: var(--secondary-color);
-  margin-bottom: 35px;
-  font-size: 2.5rem;
-  font-weight: 700;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-light);
+}
+h1 .icon {
+  font-size: 2.2rem;
 }
 
-h2 {
-  font-size: 1.6rem;
-  color: var(--secondary-color);
-  margin-bottom: 20px;
-  font-weight: 600;
+/* --- Cabeçalho (Busca e Botão Novo) --- */
+.crud-header {
+  display: flex;
+  justify-content: flex-end; /* Apenas botão novo */
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+.search-filter {
+  /* Espaço para futuros filtros */
 }
 
-h3 { /* Títulos de Seção */
-    font-size: 1.3rem;
-    color: var(--secondary-color);
-    margin-top: 25px;
-    margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
-}
-
-/* --- Toggle Button --- */
-.form-toggle {
-    margin-bottom: 25px;
-    text-align: right;
-}
-.form-toggle button {
-    text-transform: none; 
-}
-
-/* --- Formulário Geral e Layout de Grid --- */
+/* --- Formulário --- */
 .form-container {
-  padding: 25px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 30px;
-  background-color: var(--light-bg);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg);
+  background-color: var(--color-background);
+}
+h2 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-lg);
+  font-weight: var(--font-weight-semibold);
 }
 
-/* Grid Básico para o cabeçalho do pedido */
-.form-group-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+.form-section {
+  margin-bottom: var(--spacing-lg);
 }
-.form-group-full {
-    display: flex;
-    gap: 15px;
-    margin-top: 15px;
+.form-section h3 {
+  font-size: var(--font-size-lg);
+  color: var(--color-secondary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-sm);
 }
-.form-group-full > div {
-    flex: 1;
-}
-
-label {
-    display: block; 
-    font-weight: 600;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-    margin-bottom: 5px; 
+.form-section h4 { /* Subtítulo para Itens */
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--spacing-sm);
 }
 
-/* Estilos de input/select/textarea */
-input, select, textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: var(--white);
+
+.form-grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+.grid-cols-1 { grid-template-columns: 1fr; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-cols-5 { grid-template-columns: repeat(5, 1fr); } /* Para linha de item */
+
+
+.form-group.span-2 { grid-column: span 2; }
+.form-group.span-3 { grid-column: span 3; }
+.form-group.span-4 { grid-column: span 4; }
+.form-group.span-5 { grid-column: span 5; }
+
+/* Checkbox */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md); /* Alinha com inputs */
+}
+.checkbox-group.align-end {
+  align-items: flex-end;
+  padding-bottom: 10px; /* Ajuste fino */
+}
+.checkbox-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+.checkbox-group label.inline-label {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+  margin: 0;
+  cursor: pointer;
 }
 
-input:focus, select:focus, textarea:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.2);
+/* Campo calculado */
+.calculated-field {
+  background-color: var(--color-primary-light);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
 }
 
-/* Estilo para campo de subtotal desabilitado na linha de item */
-.subtotal-input {
-    background-color: #e8f0fe; 
-    font-weight: 600;
-    color: var(--accent-color);
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
 }
 
-/* --- Linha de Input de Item Dinâmica --- */
+/* --- Divisor --- */
+.divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-lg) 0;
+}
+
+/* --- Lista de Itens --- */
+.crud-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--spacing-md);
+}
+.list-item {
+  display: grid;
+  /* Grid ajustado para Compra: Info | Detalhes | Ações */
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--spacing-lg); /* Mais espaço entre colunas */
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 6px;
+  /* Cor da borda será definida pela classe de status */
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+  cursor: pointer;
+}
+.list-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  /* A cor da borda de status não muda no hover */
+}
+
+/* Status de Cor da Borda para Lista de Compras */
+.list-item.status-P { border-left-color: var(--color-warning); } /* Pendente */
+.list-item.status-A { border-left-color: var(--color-accent); } /* Aprovada */
+.list-item.status-R { border-left-color: var(--color-success); } /* Recebida */
+.list-item.status-C { border-left-color: var(--color-danger); background-color: #fffafa;} /* Cancelada */
+
+.item-main-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  overflow: hidden;
+}
+.id-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+.item-name {
+  font-size: var(--font-size-md); /* Reduzido para dar espaço */
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tag de Status na Lista */
+.item-status {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-full);
+  text-transform: uppercase;
+  margin-left: var(--spacing-sm); /* Espaço antes do status */
+}
+/* Cores da Tag de Status */
+.item-status.status-P { background-color: #fffbeb; color: #b45309; }
+.item-status.status-A { background-color: #eff6ff; color: #2563eb; }
+.item-status.status-R { background-color: var(--color-primary-light); color: var(--color-primary-dark); }
+.item-status.status-C { background-color: #fff5f5; color: #c0392b; }
+
+
+.item-details {
+  display: flex;
+  gap: var(--spacing-md); /* Mais espaço entre detalhes */
+  flex-wrap: nowrap; /* Não quebrar linha */
+  overflow: hidden; /* Esconder overflow */
+  justify-content: flex-end; /* Alinha tags à direita */
+}
+.detail-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0; /* Não encolher */
+}
+/* Estilos Específicos CompraView */
+.detail-tag.fornecedor { color: var(--color-secondary); background-color: #e5e7eb;}
+.detail-tag.date { color: var(--color-accent-dark); background-color: #eff6ff;}
+.detail-tag.total {
+    color: var(--color-success);
+    font-weight: var(--font-weight-semibold);
+    background-color: var(--color-primary-light);
+}
+
+
+.item-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+.btn-action {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  font-size: 1.1rem;
+  transition: all var(--transition-base);
+}
+.btn-action:hover {
+  background-color: var(--color-background);
+}
+.btn-edit:hover { color: var(--color-accent); }
+.btn-delete:hover { color: var(--color-danger); }
+
+/* --- Paginação --- */
+.paginator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+.paginator button {
+  font-weight: var(--font-weight-medium);
+}
+
+/* --- ESTILOS ESPECÍFICOS PARA COMPRAVIEW --- */
+
+/* Linha de Input de Item */
 .item-input-row {
-    margin-bottom: 25px !important;
-    padding: 15px;
-    background-color: #e6eef6; 
-    border-radius: 8px;
+  background-color: #e6eef6; /* Fundo azul claro */
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg) !important; /* Sobrescreve margem padrão */
 }
 .action-item-button {
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: 0px;
+  display: flex;
+  align-items: flex-end;
 }
 .action-item-button button {
-    height: 40px; 
-    width: 100%;
-    font-size: 1.2rem;
-    line-height: 1;
-    padding: 0;
-    background-color: var(--primary-color);
+  height: 42px; /* Altura igual aos inputs */
+  width: 100%;
 }
 
-/* --- Layout da Tabela de Itens e Totais (Resumo) --- */
-.resumo-grid {
-    display: grid;
-    grid-template-columns: 3fr 1fr; /* 3/4 para itens, 1/4 para totais */
-    gap: 20px;
-    margin-top: 20px;
+/* Tabela de Itens no Formulário */
+.item-list-container {
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+.item-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-md);
+  overflow: hidden; /* Para border-radius funcionar */
+  border: 1px solid var(--color-border);
+}
+.item-table th, .item-table td {
+  padding: var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.item-table th {
+  background-color: var(--color-background);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+.item-table td {
+  font-size: var(--font-size-sm);
+}
+.item-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.btn-action-table {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: white;
+  cursor: pointer;
+  margin-right: var(--spacing-xs);
+}
+.btn-action-table.edit { background-color: var(--color-accent); }
+.btn-action-table.delete { background-color: var(--color-danger); }
+
+.item-empty {
+    margin: var(--spacing-lg) 0;
 }
 
-.lista-itens-wrapper {
-    padding: 15px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: var(--white);
-    overflow-x: auto;
+/* Resumo Financeiro */
+.finance-summary {
+    align-items: flex-end; /* Alinha o bloco de totais com os inputs */
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px dashed var(--color-border);
 }
-
-/* Estilos da Tabela */
-.itens-compra-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.itens-compra-table th, .itens-compra-table td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-}
-.itens-compra-table th {
-    background-color: #f7f9fb;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-}
-
-/* Botões dentro da tabela */
-.editar-item, .remover-item {
-    padding: 6px 10px;
-    font-size: 0.85rem;
-    margin-left: 5px;
-    text-transform: none;
-    box-shadow: none;
-}
-.editar-item { background-color: var(--accent-color); }
-.remover-item { background-color: var(--danger-color); }
-
-.alerta-vazio {
-    margin-top: 10px;
-    font-style: italic;
-    color: #7f8c8d;
-    padding: 10px;
-}
-
-/* --- Coluna de Totais (totais-compra) --- */
-.totais-compra {
-    padding: 15px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: var(--white);
-}
-
-.totais-campos {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.totais-resumo {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Coluna de Nome e Coluna de Valor */
-    gap: 5px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--border-color);
-    font-size: 1rem;
-}
-.totais-resumo p {
-    margin: 0;
-    padding: 2px 0;
-}
-.totais-resumo p:nth-child(odd) { /* Labels */
-    font-weight: 500;
-    text-align: left;
-}
-.totais-resumo p:nth-child(even) { /* Valores */
-    font-weight: 600;
+.totals-display {
+    background-color: var(--color-surface);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-border);
     text-align: right;
 }
-
-.valor-final-label {
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
-    color: var(--secondary-color);
-    border-top: 1px solid var(--secondary-color);
-    margin-top: 5px !important;
-    padding-top: 5px !important;
+.totals-display p {
+    margin: var(--spacing-sm) 0;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
 }
-.valor-final {
-    font-size: 1.1rem !important;
-    color: var(--primary-color) !important;
-    border-top: 1px solid var(--secondary-color);
-    margin-top: 5px !important;
-    padding-top: 5px !important;
+.totals-display strong {
+    color: var(--color-text-primary);
+}
+.totals-display .desconto-valor strong {
+    color: var(--color-danger);
+}
+.totals-display .valor-final {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-dark);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-border);
+}
+.totals-display .valor-final strong {
+    color: var(--color-primary-dark);
 }
 
-/* --- Ações e Botões (Padrão) --- */
-.form-actions {
-  display: flex; justify-content: flex-end; gap: 15px; margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);
+
+/* --- Responsividade do CRUD (Ajustada para Compra) --- */
+@media (max-width: 900px) {
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-5 { grid-template-columns: repeat(3, 1fr); } /* Ajuste para linha de item */
+  .item-input-row .form-group.span-2 { grid-column: span 3; } /* Produto ocupa mais espaço */
+  .finance-summary { grid-template-columns: repeat(2, 1fr); }
+  .totals-display { grid-column: span 2; }
+
+
+  .list-item {
+     grid-template-columns: 1fr auto; /* Info | Ações */
+     gap: var(--spacing-sm);
+  }
+   .compra-details {
+    grid-column: 1 / 2; /* Detalhes vão para baixo */
+    grid-row: 2 / 3;
+    flex-wrap: wrap; /* Permite quebrar linha */
+    justify-content: flex-start; /* Alinha à esquerda */
+    margin-top: var(--spacing-sm);
+  }
+  .item-actions {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    flex-direction: column;
+  }
 }
-button { padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; background-color: var(--primary-color); color: var(--white); font-weight: 600; transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
-button:hover:not(:disabled) { background-color: #358a66; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); transform: translateY(-1px); }
-button.cancelar { background-color: #95a5a6; text-transform: none; }
-button.cancelar:hover:not(:disabled) { background-color: #7f8c8d; }
-button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--border-color), rgba(0, 0, 0, 0)); margin: 30px 0; }
 
-/* --- Lista de Compras (.compra-list) --- */
-.loading-message { text-align: center; color: var(--primary-color); font-size: 1.2rem; font-weight: 600; margin: 30px 0; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0% { opacity: 0.8; } 50% { opacity: 1; } 100% { opacity: 0.8; } }
+@media (max-width: 600px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5 {
+    grid-template-columns: 1fr; /* Coluna única */
+  }
+  .form-group.span-2, .form-group.span-3, .form-group.span-4, .form-group.span-5 {
+    grid-column: span 1;
+  }
+  .finance-summary { grid-template-columns: 1fr; }
+  .checkbox-group.align-end {
+    align-items: center;
+    padding-top: var(--spacing-sm);
+    padding-bottom: 0;
+  }
+  /* Ajustes na tabela de itens em telas pequenas */
+  .item-table thead { display: none; } /* Esconde cabeçalho */
+  .item-table tr {
+      display: block;
+      margin-bottom: var(--spacing-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius-md);
+      padding: var(--spacing-sm);
+  }
+  .item-table td {
+      display: block;
+      text-align: right; /* Alinha valor à direita */
+      border-bottom: none;
+      padding: var(--spacing-xs) 0;
+  }
+  .item-table td::before {
+      content: attr(data-label); /* Usa um atributo data-label (precisa adicionar no :key) */
+      float: left;
+      font-weight: bold;
+      color: var(--color-text-secondary);
+      margin-right: var(--spacing-sm);
+  }
+   .item-table td:last-child {
+       text-align: center; /* Centraliza botões */
+       padding-top: var(--spacing-sm);
+   }
 
-.compra-list { list-style: none; padding: 0; display: grid; gap: 10px; }
-.compra-list li {
-  display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; 
-  background-color: var(--white); border: 1px solid var(--border-color);
-  border-left: 6px solid var(--accent-color); border-radius: 8px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); transition: box-shadow 0.3s, transform 0.3s;
 }
-.compra-list li:hover { box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }
-
-/* Estilos de Status */
-.compra-list li.compra-status-P { border-left-color: var(--pending-color); } /* Pendente */
-.compra-list li.compra-status-A { border-left-color: var(--approved-color); } /* Aprovada */
-.compra-list li.compra-status-R { border-left-color: var(--success-color); } /* Recebida */
-.compra-list li.compra-status-C { border-left-color: var(--danger-color); opacity: 0.7; } /* Cancelada */
-
-.compra-info { flex-grow: 1; cursor: pointer; display: flex; align-items: center; color: var(--secondary-color); gap: 15px; }
-.compra-info strong { font-size: 1.15rem; margin-right: 15px; color: #2c3e50; }
-.id-tag { background-color: #ecf0f1; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; margin-right: 15px; color: #7f8c8d; font-weight: 700; }
-
-.fornecedor { font-size: 1rem; color: #555; }
-.total { font-size: 1.1rem; font-weight: 700; color: var(--primary-color); margin-left: 20px; }
-.data { font-size: 0.9rem; color: #7f8c8d; margin-left: auto; }
-
-.status-tag { font-size: 0.85rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; margin-left: 10px; }
-
-/* Estilos para o Status Display */
-.compra-status-P .status-tag { background-color: #fef0cd; color: var(--pending-color); }
-.compra-status-A .status-tag { background-color: #e2d1eb; color: var(--approved-color); }
-.compra-status-R .status-tag { background-color: #d4edda; color: var(--success-color); }
-.compra-status-C .status-tag { background-color: #f8d7da; color: var(--danger-color); }
-
-.actions button { margin-left: 10px; padding: 8px 15px; font-size: 0.95rem; text-transform: none; }
-.actions .editar { background-color: var(--accent-color); }
-.actions .editar:hover { background-color: #2980b9; }
-.actions .excluir { background-color: var(--danger-color); }
-.actions .excluir:hover { background-color: #c0392b; }
-
-/* --- Paginação (Padrão) --- */
-.paginator { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 40px; font-size: 1.1rem; color: var(--secondary-color); font-weight: 500; }
-.paginator button { padding: 8px 18px; font-size: 1rem; background-color: #ecf0f1; color: var(--secondary-color); box-shadow: none; text-transform: none; }
-.paginator button:hover:not(:disabled) { background-color: #bdc3c7; transform: none; box-shadow: none; }
 </style>
