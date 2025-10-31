@@ -1,499 +1,505 @@
 <script setup>
 import { reactive, onMounted, ref } from 'vue'
 import { useRelatorioStore } from '@/stores/relatorioStore'
-
 const relatorioStore = useRelatorioStore()
-
-// --- ESTADO DE CONTROLE ---
-const abaAtiva = ref('vendas') 
-const formAberto = ref(false) 
-
-// --- ESTADO DO FORMULÁRIO (Vendas) ---
-const defaultRelatorioVenda = { 
-    nome: '', 
-    data_inicio: null,
-    data_fim: null,
-    funcionario_gerador: null, // FK ID
-    observacoes: null,
+const abaAtiva = ref('vendas')
+const formAberto = ref(false)
+const defaultRelatorioVenda = {
+  nome: '', data_inicio: null, data_fim: null,
+  funcionario_gerador: null, observacoes: null,
 }
 const relatorioVenda = reactive({ ...defaultRelatorioVenda })
-
-// --- ESTADO DO FORMULÁRIO (Estoque) ---
-const defaultRelatorioEstoque = { 
-    nome: '', 
-    funcionario_gerador: null, // FK ID
-    observacoes: null,
+const defaultRelatorioEstoque = {
+  nome: '', funcionario_gerador: null, observacoes: null,
 }
 const relatorioEstoque = reactive({ ...defaultRelatorioEstoque })
 
-
-// --- CICLO DE VIDA E FUNÇÕES BÁSICAS ---
 onMounted(async () => {
-    // A ordem é importante, pois o getRelatoriosVenda pode estar falhando
-    await Promise.all([
-        relatorioStore.loadDependencies(),
-        relatorioStore.getRelatoriosVenda(),
-        relatorioStore.getRelatoriosEstoque(),
-    ]);
+  await Promise.all([
+    relatorioStore.loadDependencies(),
+    relatorioStore.getRelatoriosVenda(),
+    relatorioStore.getRelatoriosEstoque(),
+  ]);
 })
-
 function mudarAba(aba) {
-    abaAtiva.value = aba;
-    formAberto.value = false; // Fecha o formulário ao mudar de aba
-    limpar(); // Reseta os dados (e o formAberto)
+  abaAtiva.value = aba;
+  formAberto.value = false;
+  limpar();
 }
-
 function limpar() {
-    Object.assign(relatorioVenda, { ...defaultRelatorioVenda })
-    Object.assign(relatorioEstoque, { ...defaultRelatorioEstoque })
-    formAberto.value = false
+  Object.assign(relatorioVenda, { ...defaultRelatorioVenda })
+  Object.assign(relatorioEstoque, { ...defaultRelatorioEstoque })
+  formAberto.value = false
 }
-
-// Função auxiliar para checar se o campo está vazio
 function isFieldEmpty(value) {
-    if (typeof value === 'string') return value.trim() === '';
-    return value === null || value === undefined;
+  if (typeof value === 'string') return value.trim() === '';
+  return value === null || value === undefined;
 }
-
-// --- Funções de Geração (Mantidas) ---
-
 async function gerarRelatorio() {
+  let dados;
+  try {
     if (abaAtiva.value === 'vendas') {
-        if (isFieldEmpty(relatorioVenda.nome) || isFieldEmpty(relatorioVenda.data_inicio) || isFieldEmpty(relatorioVenda.data_fim) || !relatorioVenda.funcionario_gerador) 
-        {
-            alert("Nome, Datas (Início e Fim) e Funcionário são obrigatórios para o Relatório de Vendas.")
-            return
-        }
-        
-        const dados = { ...relatorioVenda };
-        dados.observacoes = isFieldEmpty(dados.observacoes) ? null : dados.observacoes;
-
-        await relatorioStore.gerarRelatorioVenda(dados);
+      if (isFieldEmpty(relatorioVenda.nome) || !relatorioVenda.data_inicio || !relatorioVenda.data_fim || !relatorioVenda.funcionario_gerador) {
+        alert("Nome, Datas (Início e Fim) e Funcionário são obrigatórios.")
+        return
+      }
+      dados = { ...relatorioVenda };
+      dados.observacoes = isFieldEmpty(dados.observacoes) ? null : dados.observacoes;
+      await relatorioStore.gerarRelatorioVenda(dados);
 
     } else if (abaAtiva.value === 'estoque') {
-        if (isFieldEmpty(relatorioEstoque.nome) || !relatorioEstoque.funcionario_gerador) 
-        {
-            alert("Nome e Funcionário são obrigatórios para o Relatório de Estoque.")
-            return
-        }
-        
-        const dados = { ...relatorioEstoque };
-        dados.observacoes = isFieldEmpty(dados.observacoes) ? null : dados.observacoes;
-        
-        await relatorioStore.gerarRelatorioEstoque(dados);
+      if (isFieldEmpty(relatorioEstoque.nome) || !relatorioEstoque.funcionario_gerador) {
+        alert("Nome e Funcionário são obrigatórios.")
+        return
+      }
+      dados = { ...relatorioEstoque };
+      dados.observacoes = isFieldEmpty(dados.observacoes) ? null : dados.observacoes;
+      await relatorioStore.gerarRelatorioEstoque(dados);
     }
+    alert("Relatório gerado com sucesso!");
     limpar();
+  } catch (error) {
+     alert("Erro ao gerar relatório. Verifique os dados e tente novamente.");
+  }
 }
-
 function toggleForm() {
-    if (formAberto.value) {
-        limpar(); 
-    } else {
-        formAberto.value = true;
+  if (formAberto.value) { limpar(); }
+  else { formAberto.value = true; }
+}
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function formatDate(isoString) {
+    if (!isoString) return 'N/A';
+    try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return 'Data inválida';
+        // Formata para dd/mm/aaaa
+        return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    } catch (e) {
+        return 'Data inválida';
+    }
+}
+// Formata Data/Hora para a lista de relatórios gerados
+function formatDateTime(isoString) {
+    if (!isoString) return 'N/A';
+     try {
+        const date = new Date(isoString);
+         if (isNaN(date.getTime())) return 'Data inválida';
+        return date.toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+            timeZone: 'UTC' // Ajuste se a API retornar UTC
+        });
+    } catch (e) {
+        return 'Data inválida';
     }
 }
 </script>
 
 <template>
-  <div class="container">
-    <h1>Gerenciamento de Relatórios</h1>
+  <div class="crud-container relatorio-view">
+    <h1><span class="icon">📈</span> Gerenciamento de Relatórios</h1>
 
     <div class="tabs-navigation">
-        <button :class="{ active: abaAtiva === 'vendas' }" @click="mudarAba('vendas')">
-            Relatórios de Vendas
-        </button>
-        <button :class="{ active: abaAtiva === 'estoque' }" @click="mudarAba('estoque')">
-            Relatórios de Estoque
-        </button>
-    </div>
-    
-    <hr class="tab-divider" />
-
-    <div class="form-toggle">
-        <button 
-            @click="toggleForm"
-            :class="{ 'cancelar': formAberto }"
-        >
-            {{ formAberto ? 'Cancelar Geração' : 'Gerar Novo Relatório' }}
-        </button>
+      <button 
+        :class="{ 'active': abaAtiva === 'vendas' }" 
+        @click="mudarAba('vendas')"
+        class="tab-btn"
+      >
+        Relatórios de Vendas
+      </button>
+      <button 
+        :class="{ 'active': abaAtiva === 'estoque' }" 
+        @click="mudarAba('estoque')"
+        class="tab-btn"
+      >
+        Relatórios de Estoque
+      </button>
     </div>
 
-    <form class="form-container" @submit.prevent="gerarRelatorio" v-if="formAberto">
-        <h2>Gerar Relatório de {{ abaAtiva === 'vendas' ? 'Vendas' : 'Estoque' }}</h2>
+    <div class="crud-header">
+       <button class="btn btn-primary" @click="toggleForm">
+        {{ formAberto ? 'Cancelar Geração' : 'Gerar Novo Relatório' }}
+      </button>
+    </div>
 
-        <div v-if="abaAtiva === 'vendas'">
-            <div class="form-group-grid" style="grid-template-columns: 2fr 1fr 1fr;">
-                <div>
-                    <label for="nomeVenda">Nome do Relatório*</label>
-                    <input id="nomeVenda" type="text" v-model="relatorioVenda.nome" required placeholder="Ex: Vendas 3º Trimestre" />
-                </div>
-                <div>
-                    <label for="dataInicio">Data de Início*</label>
-                    <input id="dataInicio" type="date" v-model="relatorioVenda.data_inicio" required />
-                </div>
-                <div>
-                    <label for="dataFim">Data de Fim*</label>
-                    <input id="dataFim" type="date" v-model="relatorioVenda.data_fim" required />
-                </div>
-            </div>
-            <div class="form-group-grid" style="grid-template-columns: 1fr 2fr;">
-                <div>
-                    <label for="funcionarioGeradorVenda">Funcionário*</label>
-                    <select id="funcionarioGeradorVenda" v-model="relatorioVenda.funcionario_gerador" required>
-                        <option :value="null" disabled>Selecione</option>
-                        <option v-for="f in relatorioStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
-                            {{ f.nome }}
-                        </option>
-                    </select>
-                </div>
-                <div>
-                    <label for="observacoesVenda">Observações</label>
-                    <textarea id="observacoesVenda" v-model="relatorioVenda.observacoes"></textarea>
-                </div>
-            </div>
-        </div>
+    <div class="form-container" v-if="formAberto">
+      <h2>Gerar Relatório de {{ abaAtiva === 'vendas' ? 'Vendas' : 'Estoque' }}</h2>
+      <form @submit.prevent="gerarRelatorio">
         
+        <div v-if="abaAtiva === 'vendas'">
+          <section class="form-section">
+            <div class="form-grid grid-cols-3">
+              <div class="form-group span-3">
+                <label for="nomeVenda">Nome do Relatório*</label>
+                <input id="nomeVenda" type="text" v-model="relatorioVenda.nome" required placeholder="Ex: Vendas 3º Trimestre" />
+              </div>
+              <div class="form-group">
+                <label for="dataInicio">Data de Início*</label>
+                <input id="dataInicio" type="date" v-model="relatorioVenda.data_inicio" required />
+              </div>
+              <div class="form-group">
+                <label for="dataFim">Data de Fim*</label>
+                <input id="dataFim" type="date" v-model="relatorioVenda.data_fim" required />
+              </div>
+               <div class="form-group">
+                <label for="funcionarioGeradorVenda">Funcionário Gerador*</label>
+                <select id="funcionarioGeradorVenda" v-model="relatorioVenda.funcionario_gerador" required>
+                  <option :value="null" disabled>Selecione</option>
+                  <option v-for="f in relatorioStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
+                    {{ f.nome }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group span-3">
+                <label for="observacoesVenda">Observações</label>
+                <textarea id="observacoesVenda" v-model="relatorioVenda.observacoes" rows="2"></textarea>
+              </div>
+            </div>
+          </section>
+        </div>
+
         <div v-else-if="abaAtiva === 'estoque'">
-            <div class="form-group-grid" style="grid-template-columns: 1fr 1fr;">
-                <div>
-                    <label for="nomeEstoque">Nome do Relatório*</label>
-                    <input id="nomeEstoque" type="text" v-model="relatorioEstoque.nome" required placeholder="Ex: Inventário Mensal de Estoque" />
-                </div>
-                <div>
-                    <label for="funcionarioGeradorEstoque">Funcionário*</label>
-                    <select id="funcionarioGeradorEstoque" v-model="relatorioEstoque.funcionario_gerador" required>
-                        <option :value="null" disabled>Selecione</option>
-                        <option v-for="f in relatorioStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
-                            {{ f.nome }}
-                        </option>
-                    </select>
-                </div>
+           <section class="form-section">
+            <div class="form-grid grid-cols-2">
+              <div class="form-group">
+                <label for="nomeEstoque">Nome do Relatório*</label>
+                <input id="nomeEstoque" type="text" v-model="relatorioEstoque.nome" required placeholder="Ex: Inventário Mensal" />
+              </div>
+              <div class="form-group">
+                <label for="funcionarioGeradorEstoque">Funcionário Gerador*</label>
+                <select id="funcionarioGeradorEstoque" v-model="relatorioEstoque.funcionario_gerador" required>
+                  <option :value="null" disabled>Selecione</option>
+                  <option v-for="f in relatorioStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
+                    {{ f.nome }}
+                  </option>
+                </select>
+              </div>
+               <div class="form-group span-2">
+                <label for="observacoesEstoque">Observações</label>
+                <textarea id="observacoesEstoque" v-model="relatorioEstoque.observacoes" rows="3"></textarea>
+              </div>
             </div>
-            <div class="form-group-full">
-                <div>
-                    <label for="observacoesEstoque">Observações</label>
-                    <textarea id="observacoesEstoque" v-model="relatorioEstoque.observacoes"></textarea>
-                </div>
-            </div>
+           </section>
         </div>
 
         <div class="form-actions">
-            <button type="submit" :disabled="relatorioStore.isLoading">
-                Gerar e Salvar Relatório
-            </button>
-            <button type="button" @click="limpar" class="cancelar" :disabled="relatorioStore.isLoading">
-                Limpar
-            </button>
+          <button type="button" @click="limpar" class="btn btn-light" :disabled="relatorioStore.isLoading">
+            Limpar
+          </button>
+           <button type="submit" class="btn btn-primary" :disabled="relatorioStore.isLoading">
+            Gerar e Salvar Relatório
+          </button>
         </div>
-    </form>
-
-    <hr v-if="!formAberto" />
-    
-    <div v-if="relatorioStore.isLoading" class="loading-message">
-        Carregando histórico de relatórios...
+      </form>
     </div>
-    
-    <p v-if="abaAtiva === 'vendas' && relatorioStore.erroVenda" class="alerta-erro">
-        {{ relatorioStore.erroVenda }}
-    </p>
 
-    <ul class="relatorio-list" v-else>
-        <template v-if="abaAtiva === 'vendas'">
-            <li v-for="r in relatorioStore.relatoriosVenda" :key="r.id" class="relatorio-venda">
-                <span class="relatorio-info">
-                    <span class="id-tag">#{{ r.id }}</span>
-                    <strong>{{ r.nome }}</strong>
-                    <span class="total-vendas">Total: R$ {{ Number(r.total_vendas || 0).toFixed(2) }}</span>
-                    <span class="ticket-medio">Ticket Médio: R$ {{ Number(r.ticket_medio || 0).toFixed(2) }}</span>
-                    <span class="periodo">{{ r.data_inicio }} a {{ r.data_fim }}</span>
-                </span>
-                <div class="actions">
-                    <span class="data-geracao">Gerado por {{ r.funcionario_gerador_nome }} em {{ r.data_geracao }}</span>
-                </div>
-            </li>
-        </template>
-        
-        <template v-else-if="abaAtiva === 'estoque'">
-            <li v-for="r in relatorioStore.relatoriosEstoque" :key="r.id" class="relatorio-estoque">
-                <span class="relatorio-info">
-                    <span class="id-tag">#{{ r.id }}</span>
-                    <strong>{{ r.nome }}</strong>
-                    <span class="total-produtos">Produtos: {{ r.total_produtos }}</span>
-                    <span class="estoque-baixo-alerta">Baixo Estoque: {{ r.produtos_estoque_baixo }}</span>
-                    <span class="valor-estoque">Valor Total: R$ {{ Number(r.valor_total_estoque || 0).toFixed(2) }}</span>
-                </span>
-                <div class="actions">
-                    <span class="data-geracao">Gerado por {{ r.funcionario_gerador_nome }} em {{ r.data_geracao }}</span>
-                </div>
-            </li>
-        </template>
-    </ul>
-    
-    <p v-if="!relatorioStore.isLoading && ((abaAtiva === 'vendas' && relatorioStore.relatoriosVenda.length === 0) || (abaAtiva === 'estoque' && relatorioStore.relatoriosEstoque.length === 0))" class="alerta-vazio-lista">
-        Nenhum relatório salvo encontrado.
-    </p>
+    <hr class="divider" />
 
+    <div v-if="abaAtiva === 'vendas' && relatorioStore.erroVenda" class="error-message">
+      {{ relatorioStore.erroVenda }}
+    </div>
+
+    <div v-if="relatorioStore.isLoading" class="loading-message">
+      Carregando histórico de relatórios...
+    </div>
+
+    <div v-else-if="abaAtiva === 'vendas'">
+       <div v-if="relatorioStore.relatoriosVenda.length === 0" class="empty-state">
+        <p>Nenhum relatório de vendas gerado.</p>
+      </div>
+      <ul class="crud-list" v-else>
+        <li
+          v-for="r in relatorioStore.relatoriosVenda"
+          :key="r.id"
+          class="list-item relatorio-venda"
+        >
+          <div class="item-main-info">
+            <span class="id-tag">#{{ r.id }}</span>
+            <span class="item-name">{{ r.nome }}</span>
+          </div>
+
+          <div class="item-details">
+            <span class="detail-tag date">Período: {{ formatDate(r.data_inicio) }} a {{ formatDate(r.data_fim) }}</span>
+            <span class="detail-tag ticket">Ticket Médio: {{ formatCurrency(r.ticket_medio) }}</span>
+            <span class="detail-tag total">{{ formatCurrency(r.total_vendas) }}</span>
+          </div>
+          
+           <div class="item-footer">
+             Gerado por {{ r.funcionario_gerador_nome }} em {{ formatDateTime(r.data_geracao) }}
+           </div>
+        </li>
+      </ul>
+    </div>
+
+    <div v-else-if="abaAtiva === 'estoque'">
+       <div v-if="relatorioStore.relatoriosEstoque.length === 0" class="empty-state">
+        <p>Nenhum relatório de estoque gerado.</p>
+      </div>
+      <ul class="crud-list" v-else>
+        <li
+          v-for="r in relatorioStore.relatoriosEstoque"
+          :key="r.id"
+          class="list-item relatorio-estoque"
+        >
+          <div class="item-main-info">
+            <span class="id-tag">#{{ r.id }}</span>
+            <span class="item-name">{{ r.nome }}</span>
+          </div>
+
+          <div class="item-details">
+             <span class="detail-tag total-items">Total Itens: {{ r.total_produtos }}</span>
+             <span 
+                class="detail-tag low-stock"
+                :class="{ 'has-low-stock': r.produtos_estoque_baixo > 0 }"
+             >
+               Baixo Estoque: {{ r.produtos_estoque_baixo }}
+             </span>
+             <span class="detail-tag total-value">Valor Estoque: {{ formatCurrency(r.valor_total_estoque) }}</span>
+          </div>
+           <div class="item-footer">
+             Gerado por {{ r.funcionario_gerador_nome }} em {{ formatDateTime(r.data_geracao) }}
+           </div>
+        </li>
+      </ul>
+    </div>
 
   </div>
 </template>
 
 <style scoped>
-/* Variáveis para fácil manutenção de cores */
-:root {
-  --primary-color: #41b883; /* Vue Green */
-  --secondary-color: #34495e; /* Dark Blue/Gray */
-  --accent-color: #3498db; /* Blue for Edit */
-  --danger-color: #e74c3c; /* Red */
-  --success-color: #2ecc71; /* Green para Totais */
-  --low-stock-color: #f39c12; /* Yellow/Orange (Estoque Baixo) */
-  --light-bg: #f7f9fb;
-  --white: #ffffff;
-  --border-color: #e0e0e0;
-}
-
-.container {
+/* --- Container Principal --- */
+.crud-container {
   max-width: 1000px;
-  margin: 40px auto;
-  padding: 40px;
-  background-color: var(--white);
-  border-radius: 12px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
-/* --- Títulos e Headers --- */
 h1 {
-  text-align: center;
-  color: var(--secondary-color);
-  margin-bottom: 35px;
-  font-size: 2.5rem;
-  font-weight: 700;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-light);
 }
-
-h2 {
-  font-size: 1.6rem;
-  color: var(--secondary-color);
-  margin-bottom: 20px;
-  font-weight: 600;
+h1 .icon {
+  font-size: 2.2rem;
 }
 
 /* --- Navegação por Abas --- */
 .tabs-navigation {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
 }
-.tabs-navigation button {
-    padding: 10px 20px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background-color: var(--white);
-    color: var(--secondary-color);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-transform: none;
-    box-shadow: none;
+.tab-btn {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: none;
+  border-bottom: 3px solid transparent;
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
 }
-.tabs-navigation button.active {
-    background-color: var(--primary-color);
-    color: var(--white);
-    border-color: var(--primary-color);
+.tab-btn:hover {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
 }
-.tabs-navigation button:hover:not(.active) {
-    background-color: #f0f0f0;
-}
-.tab-divider {
-    margin-top: 0;
-    margin-bottom: 25px;
+.tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 
-/* --- Toggle Button --- */
-.form-toggle {
-    margin-bottom: 25px;
-    text-align: right;
-}
-.form-toggle button {
-    text-transform: none; 
+/* --- Cabeçalho (Botão Novo) --- */
+.crud-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
 }
 
-/* --- Formulário de Geração --- */
+/* --- Formulário --- */
 .form-container {
-  padding: 25px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 30px;
-  background-color: var(--light-bg);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg);
+  background-color: var(--color-background);
+}
+h2 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-lg);
+  font-weight: var(--font-weight-semibold);
 }
 
-.form-group-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+.form-section {
+  margin-bottom: var(--spacing-lg);
 }
-.form-group-full {
-    display: flex;
-    gap: 15px;
-    margin-top: 15px;
+/* Remove h3 (opcional, mas limpa o form de geração) */
+/*
+.form-section h3 {
+  font-size: var(--font-size-lg); ...
 }
-.form-group-full > div {
-    flex: 1;
-}
+*/
 
-label {
-    display: block; 
-    font-weight: 600;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-    margin-bottom: 5px; 
+.form-grid {
+  display: grid;
+  gap: var(--spacing-md);
 }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
 
-/* Estilos de input/select/textarea */
-input, select, textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: var(--white);
-}
+.form-group.span-2 { grid-column: span 2; }
+.form-group.span-3 { grid-column: span 3; }
 
-input:focus, select:focus, textarea:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.2);
-}
-
-
-/* --- Ações e Botões (Padrão) --- */
 .form-actions {
   display: flex;
-  justify-content: flex-end; 
-  gap: 15px;
-  margin-top: 30px;
-  padding-top: 15px;
-  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
 }
 
-button {
-  padding: 12px 25px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background-color: var(--primary-color);
-  color: var(--white);
-  font-weight: 600;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* --- Divisor --- */
+.divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-lg) 0;
 }
 
-button:hover:not(:disabled) { background-color: #358a66; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); transform: translateY(-1px); }
-button.cancelar { background-color: #95a5a6; text-transform: none; }
-button.cancelar:hover:not(:disabled) { background-color: #7f8c8d; }
-button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--border-color), rgba(0, 0, 0, 0)); margin: 30px 0; }
-
-/* --- Lista de Relatórios (.relatorio-list) --- */
-.loading-message { text-align: center; color: var(--primary-color); font-size: 1.2rem; font-weight: 600; margin: 30px 0; animation: pulse 1.5s infinite; }
-
-.relatorio-list {
+/* --- Lista de Itens (Relatórios) --- */
+.crud-list {
   list-style: none;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: var(--spacing-md);
+}
+.list-item {
+  display: grid;
+  /* Grid para Info | Detalhes (quebra linha) | Footer */
+  grid-template-columns: 1fr; 
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 6px;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+  cursor: default; /* Não são editáveis */
+}
+.list-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
-.relatorio-list li {
-  display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; 
-  background-color: var(--white); border: 1px solid var(--border-color);
-  border-left: 6px solid var(--primary-color);
-  border-radius: 8px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); transition: box-shadow 0.3s, transform 0.3s;
+/* Status de Cor da Borda */
+.list-item.relatorio-venda { border-left-color: var(--color-primary); }
+.list-item.relatorio-estoque { border-left-color: var(--color-accent); }
+
+.item-main-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  overflow: hidden;
+}
+.id-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+.item-name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.relatorio-list li:hover { box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }
-
-/* Estilo para relatórios de venda (borda verde primária) */
-.relatorio-venda {
-    border-left-color: var(--primary-color) !important;
+.item-details {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap; /* Permite quebrar linha */
+  margin-top: var(--spacing-sm);
 }
-/* Estilo para relatórios de estoque (borda azul de destaque) */
-.relatorio-estoque {
-    border-left-color: var(--accent-color) !important;
+.detail-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
-
-
-.relatorio-info {
-  flex-grow: 1; cursor: default; display: flex; align-items: center; color: var(--secondary-color); gap: 15px;
+/* Estilos Específicos RelatorioView */
+.detail-tag.date { color: var(--color-accent-dark); background-color: #eff6ff;}
+.detail-tag.ticket { color: var(--color-secondary); background-color: #e5e7eb;}
+.detail-tag.total {
+    color: var(--color-success);
+    font-weight: var(--font-weight-semibold);
+    background-color: var(--color-primary-light);
 }
-
-.relatorio-info strong { font-size: 1.15rem; margin-right: 15px; color: #2c3e50; }
-.id-tag { background-color: #ecf0f1; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; margin-right: 15px; color: #7f8c8d; font-weight: 700; }
-
-/* Destaque para os Totais */
-.total-vendas, .valor-estoque {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--success-color);
-}
-.ticket-medio {
-    font-size: 0.95rem;
-    color: #7f8c8d;
-}
-
-/* Alerta de Estoque Baixo (vermelho/laranja) */
-.estoque-baixo-alerta {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--low-stock-color);
-    background-color: #fef0cd;
-    padding: 3px 8px;
-    border-radius: 4px;
+/* Estoque */
+.detail-tag.total-items { color: var(--color-secondary); background-color: #e5e7eb;}
+.detail-tag.total-value { color: var(--color-success); font-weight: var(--font-weight-semibold); background-color: var(--color-primary-light); }
+.detail-tag.low-stock { color: var(--color-text-secondary); }
+.detail-tag.low-stock.has-low-stock {
+    color: #b45309;
+    background-color: #fffbeb;
+    font-weight: var(--font-weight-semibold);
 }
 
-.periodo, .data-geracao {
-    font-size: 0.9rem;
-    color: #7f8c8d;
-    margin-left: auto;
-}
-.relatorio-info .periodo {
-    margin-left: 15px;
-}
-.actions .data-geracao {
-    font-size: 0.95rem;
+
+/* Footer do Item */
+.item-footer {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
     font-style: italic;
-    color: var(--secondary-color);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px dashed var(--color-border-light);
 }
 
-.alerta-vazio-lista {
-    text-align: center;
-    padding: 20px;
-    color: #7f8c8d;
-    font-style: italic;
+/* --- Responsividade --- */
+@media (max-width: 900px) {
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .form-group.span-3 { grid-column: span 2; }
 }
 
-/* --- NOVO ESTILO: Bloco de Erro da API --- */
-.alerta-erro {
-    color: var(--danger-color);
-    background-color: #f8d7da;
-    border: 1px solid var(--danger-color);
-    padding: 15px;
-    border-radius: 8px;
-    font-weight: 600;
-    margin-bottom: 20px;
-    text-align: center;
+@media (max-width: 600px) {
+  .grid-cols-2, .grid-cols-3 { 
+    grid-template-columns: 1fr; /* Coluna única */
+  }
+  .form-group.span-2, .form-group.span-3 {
+    grid-column: span 1;
+  }
+  .tabs-navigation {
+      flex-wrap: wrap; /* Permite quebrar linha */
+  }
+  .tab-btn {
+      flex-grow: 1;
+      text-align: center;
+  }
 }
-
-/* --- Paginação (Padrão) --- */
-.paginator { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 40px; font-size: 1.1rem; color: var(--secondary-color); font-weight: 500; }
-.paginator button { padding: 8px 18px; font-size: 1rem; background-color: #ecf0f1; color: var(--secondary-color); box-shadow: none; text-transform: none; }
-.paginator button:hover:not(:disabled) { background-color: #bdc3c7; transform: none; box-shadow: none; }
 </style>

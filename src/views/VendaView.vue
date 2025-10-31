@@ -1,591 +1,775 @@
 <script setup>
 import { reactive, onMounted, ref, computed } from 'vue'
-import { useVendaStore } from '@/stores/vendaStore' 
-
+import { useVendaStore } from '@/stores/vendaStore'
 const vendaStore = useVendaStore()
-
-// --- ESTADO DE CONTROLE ---
-const formAberto = ref(false) 
-const itemIndexToEdit = ref(null) // Usado para saber qual item da lista está sendo editado
-
-// Status (do modelo Django)
+const formAberto = ref(false)
+const itemIndexToEdit = ref(null)
 const STATUS_OPTIONS = [
-    { value: 'pendente', label: 'Pendente' },
-    { value: 'finalizada', label: 'Finalizada' },
-    { value: 'cancelada', label: 'Cancelada' },
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'finalizada', label: 'Finalizada' },
+  { value: 'cancelada', label: 'Cancelada' },
 ];
-
-// --- ESTADO DO FORMULÁRIO ---
-const defaultVenda = { 
-    id: null, 
-    funcionario: null, // FK ID
-    data_venda: null, // Omitido, pois o DRF usa timezone.now
-    desconto: 0.00,
-    status: 'pendente',
-    observacoes: null,
-    itens: [], // Array de ItemVenda
+const defaultVenda = {
+  id: null, funcionario: null, desconto: 0.00,
+  status: 'pendente', observacoes: null, itens: [],
 }
 const venda = reactive({ ...defaultVenda })
-
-const defaultItem = {
-    produto: null, // FK ID
-    quantidade: 1,
-    preco_unitario: 0.00,
-}
+const defaultItem = { produto: null, quantidade: 1, preco_unitario: 0.00 }
 const itemAtual = reactive({ ...defaultItem })
 
-// --- COMPUTED PROPERTIES ---
-
-// Calcula o subtotal de um item
+// Computeds
 const subtotalItemAtual = computed(() => {
-    return (itemAtual.quantidade || 0) * (itemAtual.preco_unitario || 0);
+  return (itemAtual.quantidade || 0) * (itemAtual.preco_unitario || 0);
 });
-
-// Calcula o total bruto da venda (soma de todos os subtotais)
 const subtotalVenda = computed(() => {
-    let totalBruto = venda.itens.reduce((sum, item) => sum + item.subtotal, 0);
-    return totalBruto;
+  return venda.itens.reduce((sum, item) => sum + item.subtotal, 0);
 });
-
-// Calcula o valor final da venda
 const valorFinalVenda = computed(() => {
-    return subtotalVenda.value - (venda.desconto || 0);
+    const final = subtotalVenda.value - (venda.desconto || 0);
+    return Math.max(0, final); // Garante que não seja negativo
+});
+// Para preencher o preço unitário automaticamente ao selecionar o produto
+const produtoSelecionado = computed(() => {
+    if (!itemAtual.produto) return null;
+    return vendaStore.produtosDisponiveis.find(p => p.id === itemAtual.produto);
+});
+
+// Watcher para auto-preencher o preço
+import { watch } from 'vue'
+watch(produtoSelecionado, (novoProduto) => {
+    if (novoProduto && itemIndexToEdit.value === null) { // Só preenche se for novo item
+        itemAtual.preco_unitario = Number(novoProduto.preco_venda || 0);
+    }
 });
 
 
-// --- CICLO DE VIDA E FUNÇÕES BÁSICAS ---
 onMounted(async () => {
-    await Promise.all([
-        vendaStore.getVendas(),
-        vendaStore.loadDependencies()
-    ]);
+  await Promise.all([
+    vendaStore.getVendas(),
+    vendaStore.loadDependencies()
+  ]);
 })
-
 function limpar() {
-    Object.assign(venda, { ...defaultVenda })
-    Object.assign(itemAtual, { ...defaultItem })
-    itemIndexToEdit.value = null;
-    formAberto.value = false
+  Object.assign(venda, { ...defaultVenda, itens: [] }) // Limpa itens
+  Object.assign(itemAtual, { ...defaultItem })
+  itemIndexToEdit.value = null;
+  formAberto.value = false
 }
-
-// --- Funções de Gestão de Itens ---
-
+function isFieldEmpty(value) {
+  if (typeof value === 'string') return value.trim() === '';
+  return value === null || value === undefined;
+}
 function adicionarOuAtualizarItem() {
-    if (!itemAtual.produto || !itemAtual.quantidade || itemAtual.preco_unitario === null) {
-        alert("Selecione o Produto, Quantidade e Preço Unitário para adicionar o item.");
+  if (!itemAtual.produto || itemAtual.quantidade < 1 || itemAtual.preco_unitario === null || itemAtual.preco_unitario < 0) {
+    alert("Selecione o Produto, Quantidade e Preço Unitário válido.");
+    return;
+  }
+  const produtoNome = produtoSelecionado.value?.nome || 'Produto Desconhecido';
+  const novoItem = {
+    ...itemAtual,
+    subtotal: subtotalItemAtual.value,
+    produto_nome: produtoNome
+  };
+  if (itemIndexToEdit.value !== null) {
+    venda.itens.splice(itemIndexToEdit.value, 1, novoItem);
+  } else {
+     // Previne duplicatas
+    const exists = venda.itens.some(p => p.produto === novoItem.produto);
+    if (exists) {
+        alert(`O produto "${novoItem.produto_nome}" já está na lista.`);
         return;
     }
-
-    const novoItem = {
-        ...itemAtual,
-        subtotal: subtotalItemAtual.value,
-        produto_nome: vendaStore.produtosDisponiveis.find(p => p.id === itemAtual.produto)?.nome || 'Produto Desconhecido'
-    };
-
-    if (itemIndexToEdit.value !== null) {
-        // Atualiza item existente
-        venda.itens.splice(itemIndexToEdit.value, 1, novoItem);
-    } else {
-        // Adiciona novo item
-        venda.itens.push(novoItem);
-    }
-
-    // Limpa o item atual para o próximo
-    Object.assign(itemAtual, { ...defaultItem });
-    itemIndexToEdit.value = null;
+    venda.itens.push(novoItem);
+  }
+  Object.assign(itemAtual, { ...defaultItem }); // Reseta o form de item
+  itemIndexToEdit.value = null;
 }
-
 function editarItem(item, index) {
-    Object.assign(itemAtual, item);
-    itemIndexToEdit.value = index;
+  Object.assign(itemAtual, item);
+  itemIndexToEdit.value = index;
 }
-
 function removerItem(index) {
-    if (confirm("Tem certeza que deseja remover este item da lista?")) {
-        venda.itens.splice(index, 1);
-    }
+  if (confirm("Remover este item da venda?")) {
+    venda.itens.splice(index, 1);
+     if (index === itemIndexToEdit.value) { // Limpa se estava editando o removido
+         Object.assign(itemAtual, { ...defaultItem });
+         itemIndexToEdit.value = null;
+     }
+  }
 }
-
-// --- Funções de CRUD da Venda ---
-
 async function salvar() {
-    if (!venda.funcionario || venda.itens.length === 0) {
-        alert("Selecione o Funcionário e adicione pelo menos um item à venda.")
-        return
-    }
-    
-    const dadosParaEnviar = { 
-        ...venda, 
-        // O total é ReadOnly no Serializer, mas incluímos o desconto
-        total: valorFinalVenda.value, // Inclui o total final calculado (opcional, mas bom para sincronia)
-        itens: venda.itens.map(item => ({
-             // Remove o campo produto_nome que é read-only no serializer de ItemVenda
-            produto: item.produto,
-            quantidade: item.quantidade,
-            preco_unitario: item.preco_unitario,
-        }))
-    };
-    
-    // Tratamento de campos opcionais nulos
-    if (dadosParaEnviar.observacoes === '') { dadosParaEnviar.observacoes = null; }
-
-    await vendaStore.salvarVenda(dadosParaEnviar)
-    limpar()
+  if (!venda.funcionario || venda.itens.length === 0) {
+    alert("Selecione o Funcionário e adicione pelo menos um item.")
+    return
+  }
+  const dadosParaEnviar = {
+    ...venda,
+    total: valorFinalVenda.value, // O serializer recalcula, mas é bom ter
+    observacoes: isFieldEmpty(venda.observacoes) ? null : venda.observacoes,
+    itens: venda.itens.map(item => ({
+      produto: item.produto,
+      quantidade: item.quantidade,
+      preco_unitario: item.preco_unitario,
+    }))
+  };
+  await vendaStore.salvarVenda(dadosParaEnviar)
+  limpar()
 }
-
 function editar(venda_para_editar) {
-    Object.assign(venda, venda_para_editar)
-    // Nota: O campo data_venda não precisa de formatação, pois é um DateTimeField read-only
-    formAberto.value = true
+  Object.assign(venda, {
+      ...venda_para_editar,
+      // Garante que 'itens' seja uma cópia reativa
+      itens: JSON.parse(JSON.stringify(venda_para_editar.itens || []))
+  })
+  formAberto.value = true
 }
-
 async function excluir(id) {
-    if (confirm("Tem certeza que deseja excluir esta venda?")) {
-        await vendaStore.excluirVenda(id)
-        limpar()
-    }
+  if (confirm("Excluir esta Venda? Ela será movida para 'Cancelada' ou excluída permanentemente.")) {
+    // Idealmente, a store deveria tentar "Cancelar" primeiro.
+    // Assumindo exclusão por enquanto:
+    await vendaStore.excluirVenda(id)
+    limpar()
+  }
 }
-
 function toggleForm() {
-    if (formAberto.value) {
-        limpar(); 
-    } else {
-        formAberto.value = true;
+  if (formAberto.value) { limpar(); }
+  else { formAberto.value = true; }
+}
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function formatDateTime(isoString) {
+    if (!isoString) return 'N/A';
+    try {
+        const date = new Date(isoString);
+         if (isNaN(date.getTime())) return 'Data inválida';
+        return date.toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+            timeZone: 'UTC' // Ajuste se a API retornar UTC
+        });
+    } catch (e) {
+        return 'Data inválida';
     }
 }
 </script>
 
 <template>
-  <div class="container">
-    <h1>Gestão de Vendas</h1>
+  <div class="crud-container">
+    <h1><span class="icon">💰</span> Gestão de Vendas</h1>
 
-    <div class="form-toggle">
-        <button 
-            @click="toggleForm"
-            :class="{ 'cancelar': formAberto }"
-        >
-            {{ venda.id ? 'Editar Venda' : formAberto ? 'Fechar Formulário' : 'Nova Venda' }}
-        </button>
+    <div class="crud-header">
+       <button class="btn btn-primary" @click="toggleForm">
+        {{ formAberto ? 'Fechar Formulário' : 'Nova Venda' }}
+      </button>
     </div>
 
-    <form class="form-container" @submit.prevent="salvar" v-if="formAberto">
-      <h2>{{ venda.id ? `Venda #${venda.id} - ${venda.status_display}` : 'Nova Venda' }}</h2>
+    <div class="form-container" v-if="formAberto">
+      <h2>{{ venda.id ? `Venda #${venda.id}` : 'Nova Venda' }}</h2>
+      <form @submit.prevent="salvar">
 
-      <section>
-        <h3>Dados da Venda</h3>
-        <div class="form-group-grid" style="grid-template-columns: 2fr 1fr 1fr;">
-          <div>
-            <label for="funcionario">Funcionário*</label>
-            <select id="funcionario" v-model="venda.funcionario" required>
-              <option :value="null" disabled>Selecione o Funcionário</option>
-              <option v-for="f in vendaStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
-                {{ f.nome }}
-              </option>
-            </select>
+        <section class="form-section">
+          <h3>Dados da Venda</h3>
+          <div class="form-grid grid-cols-3">
+             <div class="form-group">
+              <label for="funcionario">Funcionário*</label>
+              <select id="funcionario" v-model="venda.funcionario" required>
+                <option :value="null" disabled>Selecione</option>
+                <option v-for="f in vendaStore.funcionariosDisponiveis" :key="f.id" :value="f.id">
+                  {{ f.nome }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="status">Status</label>
+              <select id="status" v-model="venda.status">
+                <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
+                  {{ s.label }}
+                </option>
+              </select>
+            </div>
+             <div class="form-group">
+              <label for="desconto">Desconto (R$)</label>
+              <input
+                id="desconto"
+                type="number"
+                step="0.01"
+                min="0"
+                v-model.number="venda.desconto"
+                placeholder="0,00"
+                :max="subtotalVenda"
+              />
+            </div>
           </div>
-          <div>
-            <label for="status">Status</label>
-            <select id="status" v-model="venda.status" :disabled="!venda.id">
-              <option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">
-                {{ s.label }}
-              </option>
-            </select>
+        </section>
+        
+        <section class="form-section">
+          <h3>Itens da Venda</h3>
+           <div class="item-input-row form-grid grid-cols-5">
+             <div class="form-group span-2">
+              <label for="produtoItem">Produto</label>
+              <select id="produtoItem" v-model="itemAtual.produto">
+                <option :value="null" disabled>Selecione</option>
+                 <option v-for="p in vendaStore.produtosDisponiveis.filter(prod => !venda.itens.some(item => item.produto === prod.id) || itemAtual.produto === prod.id)" :key="p.id" :value="p.id">
+                  {{ p.nome }} ({{ formatCurrency(p.preco_venda) }})
+                </option>
+              </select>
+            </div>
+             <div class="form-group">
+              <label for="quantidade">Qtd.</label>
+              <input id="quantidade" type="number" v-model.number="itemAtual.quantidade" min="1" placeholder="1" />
+            </div>
+            <div class="form-group">
+              <label for="precoUnitario">Preço Unit.</label>
+              <input id="precoUnitario" type="number" step="0.01" v-model.number="itemAtual.preco_unitario" placeholder="0,00" />
+            </div>
+             <div class="form-group action-item-button align-end">
+              <button type="button" @click="adicionarOuAtualizarItem" :disabled="!itemAtual.produto" class="btn btn-accent">
+                {{ itemIndexToEdit !== null ? 'Atualizar' : 'Adicionar' }}
+              </button>
+            </div>
           </div>
-          <div>
-            <label for="desconto">Desconto (R$)</label>
-            <input 
-                id="desconto" 
-                type="number" 
-                step="0.01" 
-                v-model.number="venda.desconto" 
-                placeholder="0.00"
-            />
-          </div>
-        </div>
-      </section>
+          
+           <div class="item-list-container" v-if="venda.itens.length > 0">
+               <h4>Itens na Venda ({{ venda.itens.length }})</h4>
+               <table class="item-table">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Qtd</th>
+                      <th>Preço Unit.</th>
+                      <th>Subtotal</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, index) in venda.itens" :key="index">
+                      <td>{{ item.produto_nome }}</td>
+                      <td>{{ item.quantidade }}</td>
+                      <td>{{ formatCurrency(item.preco_unitario) }}</td>
+                      <td class="subtotal-col">{{ formatCurrency(item.subtotal) }}</td>
+                      <td>
+                        <button type="button" @click="editarItem(item, index)" class="btn-action-table edit">Editar</button>
+                        <button type="button" @click="removerItem(index)" class="btn-action-table delete">Remover</button>
+                      </td>
+                    </tr>
+                  </tbody>
+               </table>
+           </div>
+           <div v-else class="empty-state item-empty">
+               <p>Adicione produtos a esta venda.</p>
+           </div>
+           
+           <div class="finance-summary form-grid grid-cols-3">
+               <div class="form-group span-2">
+                 </div>
+               <div class="totals-display">
+                  <p>Subtotal Itens: <strong>{{ formatCurrency(subtotalVenda) }}</strong></p>
+                  <p class="desconto-valor">Desconto: <strong>- {{ formatCurrency(venda.desconto) }}</strong></p>
+                  <p class="valor-final">Total Venda: <strong>{{ formatCurrency(valorFinalVenda) }}</strong></p>
+               </div>
+           </div>
+        </section>
+        
+         <section class="form-section">
+           <h3>Observações</h3>
+           <div class="form-group">
+              <label for="observacoes">Observações (Opcional)</label>
+              <textarea id="observacoes" v-model="venda.observacoes" rows="3"></textarea>
+            </div>
+        </section>
 
-      <section>
-        <h3>Itens da Venda</h3>
-        <div class="form-group-grid" style="grid-template-columns: 3fr 1fr 1fr 1fr 50px;">
-            <div>
-                <label for="produto">Produto</label>
-                <select id="produto" v-model="itemAtual.produto">
-                    <option :value="null" disabled>Selecione o Produto</option>
-                    <option v-for="p in vendaStore.produtosDisponiveis" :key="p.id" :value="p.id">
-                        {{ p.nome }} (R$ {{ p.preco_unitario }})
-                    </option>
-                </select>
-            </div>
-            <div>
-                <label for="quantidade">Qtd.</label>
-                <input id="quantidade" type="number" v-model.number="itemAtual.quantidade" min="1" placeholder="1" />
-            </div>
-            <div>
-                <label for="precoUnitario">Preço Unitário</label>
-                <input id="precoUnitario" type="number" step="0.01" v-model.number="itemAtual.preco_unitario" placeholder="0.00" />
-            </div>
-            <div>
-                <label>Subtotal</label>
-                <input type="text" :value="subtotalItemAtual.toFixed(2)" disabled class="subtotal-input" />
-            </div>
-            <div class="action-item-button">
-                <button type="button" @click="adicionarOuAtualizarItem" :disabled="!itemAtual.produto">
-                    {{ itemIndexToEdit !== null ? '🖊️' : '➕' }}
-                </button>
-            </div>
+        <div class="form-actions">
+          <button type="button" @click="limpar" class="btn btn-light" :disabled="vendaStore.isLoading">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" :disabled="vendaStore.isLoading || venda.itens.length === 0">
+            {{ venda.id ? 'Atualizar Venda' : 'Salvar Venda' }}
+          </button>
         </div>
-      </section>
+      </form>
+    </div>
 
-      <section v-if="venda.itens.length > 0" class="resumo-itens">
-        <h4>Resumo dos Itens ({{ venda.itens.length }})</h4>
-        <table>
-            <thead>
-                <tr>
-                    <th>Produto</th>
-                    <th>Qtd</th>
-                    <th>Preço Unitário</th>
-                    <th>Subtotal</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="(item, index) in venda.itens" :key="index">
-                    <td>{{ item.produto_nome }}</td>
-                    <td>{{ item.quantidade }}</td>
-                    <td>R$ {{ Number(item.preco_unitario).toFixed(2) }}</td>
-                    <td>R$ {{ Number(item.subtotal).toFixed(2) }}</td>
-                    <td>
-                        <button type="button" @click="editarItem(item, index)" class="editar-item">Editar</button>
-                        <button type="button" @click="removerItem(index)" class="remover-item">Remover</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <hr class="divider" />
 
-        <div class="totais">
-            <p><strong>Total Bruto:</strong> R$ {{ subtotalVenda.toFixed(2) }}</p>
-            <p class="desconto-valor"><strong>Desconto:</strong> R$ {{ Number(venda.desconto || 0).toFixed(2) }}</p>
-            <p class="valor-final"><strong>Valor Total:</strong> R$ {{ valorFinalVenda.toFixed(2) }}</p>
-        </div>
-      </section>
-      
-      <div class="form-group-full">
-        <div>
-            <label for="observacoes">Observações</label>
-            <textarea id="observacoes" v-model="venda.observacoes"></textarea>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button type="submit" :disabled="vendaStore.isLoading || venda.itens.length === 0">
-          {{ venda.id ? 'Atualizar' : 'Salvar' }} Venda
-        </button>
-        <button type="button" @click="limpar" class="cancelar" :disabled="vendaStore.isLoading">
-          Cancelar
-        </button>
-      </div>
-    </form>
-    
-    <hr>
-    
     <div v-if="vendaStore.isLoading" class="loading-message">
-        Carregando vendas...
+      Carregando vendas...
     </div>
-
-    <ul class="venda-list" v-else>
-      <li v-for="v in vendaStore.vendas" :key="v.id" :class="`venda-status-${v.status}`">
-        <span class="venda-info" @click="editar(v)">
+    <div v-else-if="vendaStore.vendas.length === 0" class="empty-state">
+      <p>Nenhuma venda encontrada.</p>
+    </div>
+    <ul class="crud-list" v-else>
+      <li
+        v-for="v in vendaStore.vendas"
+        :key="v.id"
+        class="list-item"
+        :class="`status-${v.status}`" @click="editar(v)"
+      >
+        <div class="item-main-info">
           <span class="id-tag">#{{ v.id }}</span>
-          <strong>{{ v.funcionario_nome }}</strong> 
-          <span class="status-tag">{{ v.status_display }}</span>
-          <span class="total">R$ {{ Number(v.total || 0).toFixed(2) }}</span>
-          <span class="data">{{ v.data_venda }}</span>
-        </span>
-        <div class="actions">
-          <button @click="editar(v)" class="editar">Detalhes/Editar</button>
-          <button @click="excluir(v.id)" class="excluir">Excluir</button>
+          <span class="item-name">{{ v.funcionario_nome }}</span>
+           <span :class="`item-status status-${v.status}`">{{ v.status_display }}</span>
+        </div>
+
+        <div class="item-details">
+           <span class="detail-tag date">Data: {{ formatDateTime(v.data_venda) }}</span>
+           <span class="detail-tag total">{{ formatCurrency(v.total) }}</span>
+        </div>
+
+        <div class="item-actions">
+          <button @click.stop="editar(v)" class="btn-action btn-edit" title="Detalhes/Editar">✏️</button>
+          <button @click.stop="excluir(v.id)" class="btn-action btn-delete" title="Excluir/Cancelar">🗑️</button>
         </div>
       </li>
     </ul>
-
+    
+     <div class="paginator" v-if="!vendaStore.isLoading && vendaStore.meta.total_pages > 1">
+       <button class="btn btn-light" :disabled="vendaStore.meta.page <= 1" @click="vendaStore.paginaAnterior">Anterior</button>
+      <span>Página {{ vendaStore.meta.page }} de {{ vendaStore.meta.total_pages }}</span>
+      <button class="btn btn-light" :disabled="vendaStore.meta.page >= vendaStore.meta.total_pages" @click="vendaStore.proximaPagina">Próxima</button>
     </div>
+
+  </div>
 </template>
+
 <style scoped>
-/* Variáveis para fácil manutenção de cores */
-:root {
-  --primary-color: #41b883; /* Vue Green */
-  --secondary-color: #34495e; /* Dark Blue/Gray */
-  --accent-color: #3498db; /* Blue for Edit */
-  --danger-color: #e74c3c; /* Red for Delete/Cancelada */
-  --success-color: #27ae60; /* Green for Finalizada */
-  --warning-color: #f39c12; /* Yellow/Orange for Pendente */
-  --light-bg: #f7f9fb;
-  --white: #ffffff;
-  --border-color: #e0e0e0;
+/* --- Container Principal --- */
+.crud-container {
+  max-width: 1200px; /* Ajustado para Venda */
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
-.container {
-  max-width: 1200px; /* Mais largo para o formulário de Venda */
-  margin: 40px auto;
-  padding: 40px;
-  background-color: var(--white);
-  border-radius: 12px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* --- Títulos e Headers --- */
 h1 {
-  text-align: center;
-  color: var(--secondary-color);
-  margin-bottom: 35px;
-  font-size: 2.5rem;
-  font-weight: 700;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-light);
+}
+h1 .icon {
+  font-size: 2.2rem;
 }
 
-h2 {
-  font-size: 1.6rem;
-  color: var(--secondary-color);
-  margin-bottom: 20px;
-  font-weight: 600;
+/* --- Cabeçalho (Busca e Botão Novo) --- */
+.crud-header {
+  display: flex;
+  justify-content: flex-end; /* Apenas botão novo */
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+.search-filter {
+  /* Espaço para futuros filtros */
 }
 
-h3 { /* Títulos de Seção */
-    font-size: 1.3rem;
-    color: var(--secondary-color);
-    margin-top: 25px;
-    margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 5px;
-}
-
-h4 { /* Subtítulo para Resumo dos Itens */
-    font-size: 1.1rem;
-    color: var(--secondary-color);
-    margin-bottom: 10px;
-}
-
-/* --- Toggle Button --- */
-.form-toggle {
-    margin-bottom: 25px;
-    text-align: right;
-}
-.form-toggle button {
-    text-transform: none; 
-}
-
-/* --- Formulário Geral e Layout de Grid --- */
+/* --- Formulário --- */
 .form-container {
-  padding: 25px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 30px;
-  background-color: var(--light-bg);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg);
+  background-color: var(--color-background);
+}
+h2 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-lg);
+  font-weight: var(--font-weight-semibold);
 }
 
-/* Grid Básico (ajustado para Venda) */
-.form-group-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+.form-section {
+  margin-bottom: var(--spacing-lg);
 }
-
-.form-group-full {
-    display: flex;
-    gap: 15px;
-    margin-top: 15px;
+.form-section h3 {
+  font-size: var(--font-size-lg);
+  color: var(--color-secondary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-sm);
 }
-.form-group-full > div {
-    flex: 1;
-}
-
-label {
-    display: block; 
-    font-weight: 600;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-    margin-bottom: 5px; 
-}
-
-/* Estilos de input/select/textarea */
-input, select, textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: var(--white);
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.2);
-}
-
-/* Estilo para o campo subtotal desabilitado na linha de item */
-.subtotal-input {
-    background-color: #ecf0f1;
-    font-weight: 700;
-}
-
-.action-item-button {
-    display: flex;
-    align-items: flex-end; /* Alinha o botão com a linha de input */
-    padding-bottom: 0px;
-}
-.action-item-button button {
-    height: 40px; /* Altura igual aos inputs */
-    width: 100%;
-    font-size: 1.2rem;
-    line-height: 1;
+.form-section h4 { /* Subtítulo para Itens */
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--spacing-sm);
 }
 
 
-/* --- Tabela de Itens (Resumo) --- */
-.resumo-itens {
-    margin-top: 20px;
-    padding: 15px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: var(--white);
+.form-grid {
+  display: grid;
+  gap: var(--spacing-md);
 }
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-}
-th, td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-}
-th {
-    background-color: #f7f9fb;
-    color: var(--secondary-color);
-    font-size: 0.95rem;
-}
-td {
-    font-size: 0.95rem;
-}
-
-/* Botões dentro da tabela */
-.editar-item, .remover-item {
-    padding: 6px 10px;
-    font-size: 0.85rem;
-    margin-left: 5px;
-}
-.editar-item { background-color: var(--accent-color); }
-.remover-item { background-color: var(--danger-color); }
+.grid-cols-1 { grid-template-columns: 1fr; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-cols-5 { grid-template-columns: repeat(5, 1fr); } /* Para linha de item */
 
 
-/* --- Totais Finais --- */
-.totais {
-    text-align: right;
-    font-size: 1.1rem;
-    padding-top: 10px;
-    border-top: 2px dashed var(--border-color);
+.form-group.span-2 { grid-column: span 2; }
+.form-group.span-3 { grid-column: span 3; }
+.form-group.span-4 { grid-column: span 4; }
+.form-group.span-5 { grid-column: span 5; }
+
+/* Checkbox */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md); /* Alinha com inputs */
 }
-.totais p {
-    margin: 5px 0;
+.checkbox-group.align-end {
+  align-items: flex-end;
+  padding-bottom: 10px; /* Ajuste fino */
 }
-.valor-final {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--success-color);
+.checkbox-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
 }
-.desconto-valor {
-    color: var(--danger-color);
+.checkbox-group label.inline-label {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+  margin: 0;
+  cursor: pointer;
 }
 
-/* --- Ações e Botões (Padrão) --- */
+/* Campo calculado */
+.calculated-field {
+  background-color: var(--color-primary-light);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
 .form-actions {
   display: flex;
-  justify-content: flex-end; 
-  gap: 15px;
-  margin-top: 30px;
-  padding-top: 15px;
-  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
 }
 
-button {
-  padding: 12px 25px;
-  border: none;
-  border-radius: 6px;
+/* --- Divisor --- */
+.divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-lg) 0;
+}
+
+/* --- Lista de Itens --- */
+.crud-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--spacing-md);
+}
+.list-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto; /* Info | Detalhes | Ações */
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 6px;
+  /* Cor da borda será definida pela classe de status */
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
   cursor: pointer;
-  background-color: var(--primary-color);
-  color: var(--white);
-  font-weight: 600;
-  transition: all 0.2s ease;
+}
+.list-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Status de Cor da Borda para Lista de Vendas */
+.list-item.status-pendente { border-left-color: var(--color-warning); }
+.list-item.status-finalizada { border-left-color: var(--color-success); }
+.list-item.status-cancelada { border-left-color: var(--color-danger); background-color: #fffafa;}
+
+.item-main-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  overflow: hidden;
+}
+.id-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+.item-name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tag de Status na Lista */
+.item-status {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-full);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-left: var(--spacing-sm); /* Espaço antes do status */
+}
+/* Cores da Tag de Status */
+.item-status.status-pendente { background-color: #fffbeb; color: #b45309; }
+.item-status.status-finalizada { background-color: var(--color-primary-light); color: var(--color-primary-dark); }
+.item-status.status-cancelada { background-color: #fff5f5; color: #c0392b; }
+
+
+.item-details {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+}
+.detail-tag {
+  background-color: var(--color-background);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Estilos Específicos VendaView */
+.detail-tag.date { color: var(--color-accent-dark); background-color: #eff6ff;}
+.detail-tag.total {
+    color: var(--color-success);
+    font-weight: var(--font-weight-semibold);
+    background-color: var(--color-primary-light);
 }
 
-/* ... (Estilos de hover, disabled, e hr) ... */
-button:hover:not(:disabled) { background-color: #358a66; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); transform: translateY(-1px); }
-button.cancelar { background-color: #95a5a6; text-transform: none; }
-button.cancelar:hover:not(:disabled) { background-color: #7f8c8d; }
-button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--border-color), rgba(0, 0, 0, 0)); margin: 30px 0; }
 
-
-/* --- Lista de Vendas (.venda-list) --- */
-.loading-message { text-align: center; color: var(--primary-color); font-size: 1.2rem; font-weight: 600; margin: 30px 0; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0% { opacity: 0.8; } 50% { opacity: 1; } 100% { opacity: 0.8; } }
-
-.venda-list { list-style: none; padding: 0; display: grid; gap: 10px; }
-.venda-list li {
-  display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; 
-  background-color: var(--white); border: 1px solid var(--border-color);
-  border-left: 6px solid var(--accent-color); border-radius: 8px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); transition: box-shadow 0.3s, transform 0.3s;
+.item-actions {
+  display: flex;
+  gap: var(--spacing-sm);
 }
-.venda-list li:hover { box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }
-
-/* Estilos de Borda de Status */
-.venda-list li.venda-status-pendente { border-left-color: var(--warning-color); }
-.venda-list li.venda-status-finalizada { border-left-color: var(--success-color); }
-.venda-list li.venda-status-cancelada { border-left-color: var(--danger-color); opacity: 0.7; }
-
-.venda-info {
-  flex-grow: 1; cursor: pointer; display: flex; align-items: center; color: var(--secondary-color); gap: 15px;
+.btn-action {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  font-size: 1.1rem;
+  transition: all var(--transition-base);
 }
-
-.venda-info strong { font-size: 1.15rem; margin-right: 15px; color: #2c3e50; }
-.id-tag { background-color: #ecf0f1; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; margin-right: 15px; color: #7f8c8d; font-weight: 700; }
-
-.total { 
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--success-color);
-    margin-left: 20px;
+.btn-action:hover {
+  background-color: var(--color-background);
 }
-.status-tag { 
-    font-size: 0.9rem; font-weight: 600; padding: 4px 10px; border-radius: 5px; margin-left: 10px;
-}
-
-/* Estilos para o Status Display */
-.venda-status-pendente .status-tag { background-color: #fef0cd; color: var(--warning-color); }
-.venda-status-finalizada .status-tag { background-color: #d4edda; color: var(--success-color); }
-.venda-status-cancelada .status-tag { background-color: #f8d7da; color: var(--danger-color); }
-
-.data { font-size: 0.9rem; color: #7f8c8d; margin-left: auto; }
-
-.actions button { margin-left: 10px; padding: 8px 15px; font-size: 0.95rem; text-transform: none; }
-.actions .editar { background-color: var(--accent-color); }
-.actions .editar:hover { background-color: #2980b9; }
-.actions .excluir { background-color: var(--danger-color); }
-.actions .excluir:hover { background-color: #c0392b; }
+.btn-edit:hover { color: var(--color-accent); }
+.btn-delete:hover { color: var(--color-danger); }
 
 /* --- Paginação --- */
-.paginator { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 40px; font-size: 1.1rem; color: var(--secondary-color); font-weight: 500; }
-.paginator button { padding: 8px 18px; font-size: 1rem; background-color: #ecf0f1; color: var(--secondary-color); box-shadow: none; text-transform: none; }
-.paginator button:hover:not(:disabled) { background-color: #bdc3c7; transform: none; box-shadow: none; }
+.paginator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+.paginator button {
+  font-weight: var(--font-weight-medium);
+}
+
+/* --- ESTILOS ESPECÍFICOS PARA VENDA (Formulário) --- */
+
+/* Linha de Input de Item */
+.item-input-row {
+  background-color: #e6eef6; /* Fundo azul claro */
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-lg) !important; /* Sobrescreve margem padrão */
+}
+.action-item-button {
+  display: flex;
+  align-items: flex-end;
+}
+.action-item-button button {
+  height: 42px; /* Altura igual aos inputs */
+  width: 100%;
+}
+
+/* Tabela de Itens no Formulário */
+.item-list-container {
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+.item-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--color-surface);
+  border-radius: var(--border-radius-md);
+  overflow: hidden; /* Para border-radius funcionar */
+  border: 1px solid var(--color-border);
+}
+.item-table th, .item-table td {
+  padding: var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.item-table th {
+  background-color: var(--color-background);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+.item-table td {
+  font-size: var(--font-size-sm);
+}
+.item-table td.subtotal-col {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+}
+.item-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.btn-action-table {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: white;
+  cursor: pointer;
+  margin-right: var(--spacing-xs);
+}
+.btn-action-table.edit { background-color: var(--color-accent); }
+.btn-action-table.delete { background-color: var(--color-danger); }
+
+.item-empty {
+    margin: var(--spacing-lg) 0;
+}
+
+/* Resumo Financeiro */
+.finance-summary {
+    align-items: flex-end; /* Alinha o bloco de totais */
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px dashed var(--color-border);
+}
+.totals-display {
+    /* Ocupa a coluna 3 (definido no grid-cols-3) */
+    grid-column: 3 / 4; 
+    background-color: var(--color-surface);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-border);
+    text-align: right;
+}
+.totals-display p {
+    margin: var(--spacing-sm) 0;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+}
+.totals-display strong {
+    color: var(--color-text-primary);
+}
+.totals-display .desconto-valor strong {
+    color: var(--color-danger);
+}
+.totals-display .valor-final {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-success); /* Verde para total de venda */
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-border);
+}
+.totals-display .valor-final strong {
+    color: var(--color-success);
+}
+
+
+/* --- Responsividade do CRUD (Ajustada para Venda) --- */
+@media (max-width: 900px) {
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-5 { grid-template-columns: repeat(3, 1fr); } /* Ajuste para linha de item */
+  .item-input-row .form-group.span-2 { grid-column: span 3; } /* Produto ocupa mais espaço */
+  
+  .finance-summary { grid-template-columns: 1fr; } /* Coluna única */
+  .totals-display { grid-column: 1 / -1; } /* Ocupa tudo */
+
+
+  .list-item {
+     grid-template-columns: 1fr auto; /* Info | Ações */
+     gap: var(--spacing-sm);
+  }
+   .item-details {
+    grid-column: 1 / 2; /* Detalhes vão para baixo */
+    grid-row: 2 / 3;
+    flex-wrap: wrap; /* Permite quebrar linha */
+    justify-content: flex-start; /* Alinha à esquerda */
+    margin-top: var(--spacing-sm);
+  }
+  .item-actions {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5 {
+    grid-template-columns: 1fr; /* Coluna única */
+  }
+  .form-group.span-2, .form-group.span-3, .form-group.span-4, .form-group.span-5 {
+    grid-column: span 1;
+  }
+  .finance-summary { grid-template-columns: 1fr; }
+  .checkbox-group.align-end {
+    align-items: center;
+    padding-top: var(--spacing-sm);
+    padding-bottom: 0;
+  }
+   /* Ajustes na tabela de itens em telas pequenas */
+  .item-table thead { display: none; } /* Esconde cabeçalho */
+  .item-table tr {
+      display: block;
+      margin-bottom: var(--spacing-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius-md);
+      padding: var(--spacing-sm);
+  }
+  .item-table td {
+      display: block;
+      text-align: right; /* Alinha valor à direita */
+      border-bottom: none;
+      padding: var(--spacing-xs) 0;
+  }
+  .item-table td::before {
+      /* Adicione data-label="Nome" no <td> para funcionar */
+      content: attr(data-label); 
+      float: left;
+      font-weight: bold;
+      color: var(--color-text-secondary);
+      margin-right: var(--spacing-sm);
+  }
+   .item-table td:last-child {
+       text-align: center; /* Centraliza botões */
+       padding-top: var(--spacing-sm);
+   }
+}
 </style>
