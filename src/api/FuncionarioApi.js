@@ -8,6 +8,15 @@ export default class FuncionarioApi {
         return data;
     }
 
+    // --- NOVO MÉTODO ---
+    // GET: Buscar TODOS os funcionários (SEM paginação, para dropdowns)
+    async buscarListaCompletaFuncionarios() {
+        // Esta URL /todos/ deve ser criada no seu backend (Django/DRF)
+        const { data } = await axios.get("/funcionarios/todos/");
+        return data;
+    }
+    // --- FIM DO NOVO MÉTODO ---
+
     // POST: Adicionar um novo funcionário
     async adicionarFuncionario(funcionario) {
         const { data } = await axios.post("/funcionarios/", funcionario);
@@ -25,11 +34,9 @@ export default class FuncionarioApi {
         await axios.delete(`/funcionarios/${id}/`);
     }
 
-    // GET: Buscar lista de cargos (necessário para o dropdown)
+    // GET: Buscar lista de cargos (necessário para o dropdown do *próprio* funcionário)
     async buscarCargos() {
-        // Assumindo que o endpoint /cargos/ retorna uma lista completa (sem paginação, se for para dropdown)
         const { data } = await axios.get(`/cargos/?ativo=true`);
-        // Note: Retorna a lista completa ou a seção 'results' se usar paginação.
         return data.results ? data.results : data;
     }
 }

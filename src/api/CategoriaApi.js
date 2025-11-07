@@ -4,8 +4,6 @@ import axios from "axios";
 // Ex: Se o Django estiver rodando em http://localhost:8000
 // const api = axios.create({ baseURL: "http://localhost:8000/api" }); 
 
-// Usaremos a URL relativa /categorias/, assumindo que a base foi configurada globalmente no Axios.
-
 export default class CategoriaApi {
   // GET: Buscar todas as categorias (com paginação e busca)
   async buscarTodasAsCategorias(page = 1, search = "") {
@@ -13,6 +11,15 @@ export default class CategoriaApi {
     const { data } = await axios.get(`/categorias/?page=${page}&search=${search}`);
     return data;
   }
+
+  // --- NOVO MÉTODO ---
+  // GET: Buscar TODAS as categorias (SEM paginação, para dropdowns)
+  async buscarListaCompletaCategorias() {
+      // Esta URL /todos/ deve ser criada no seu backend (Django/DRF)
+      const { data } = await axios.get("/categorias/todos/");
+      return data;
+  }
+  // --- FIM DO NOVO MÉTODO ---
 
   // POST: Adicionar uma nova categoria
   async adicionarCategoria(categoria) {
@@ -25,13 +32,11 @@ export default class CategoriaApi {
   async atualizarCategoria(categoria) {
     // Requer o ID na URL
     const { data } = await axios.put(`/categorias/${categoria.id}/`, categoria);
-    // Note: O DRF retorna o objeto atualizado no body (data)
     return data; 
   }
 
   // DELETE: Excluir uma categoria
   async excluirCategoria(id) {
-    // O DRF retorna status 204 (No Content)
     await axios.delete(`/categorias/${id}/`);
   }
 }

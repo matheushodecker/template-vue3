@@ -21,13 +21,20 @@ const saudacao = computed(() => {
   if (hora < 18) return 'Boa tarde'
   return 'Boa noite'
 })
+
+// ATUALIZADO AQUI
 onMounted(async () => {
   isLoading.value = true
   try {
     await Promise.all([
-      produtoStore.getProdutos(1, '', '-id'),
+      // Alterado de getProdutos(1,...) para getProdutosTodos()
+      // Isso garante que as métricas do dashboard sejam calculadas 
+      // com base em TODOS os produtos, não apenas na página 1.
+      produtoStore.getProdutosTodos({ ordering: '-id' }),
+      
       vendaStore.getVendas()
     ])
+    // calcularMetricas agora usará a lista completa de produtos
     calcularMetricas()
   } catch (error) {
     console.error('Erro ao carregar dashboard:', error)
@@ -35,14 +42,13 @@ onMounted(async () => {
     isLoading.value = false
   }
 })
+
 function calcularMetricas() {
+  // Agora 'todosProdutos' contém a lista completa graças ao getProdutosTodos()
   const todosProdutos = produtoStore.produtos
   const todasVendas = vendaStore.vendas
   
-  // Métrica de Estoque Baixo (usando a contagem total, não apenas a primeira página)
-  // Idealmente, a API deveria fornecer isso.
-  // Vamos assumir que `getProdutos` busca todos por enquanto, ou usamos a meta.
-  // Para este exemplo, vamos filtrar os produtos já carregados.
+  // Métrica de Estoque Baixo (agora correta)
   produtosBaixoEstoque.value = todosProdutos
     .filter(p => p.ativo && p.estoque_atual <= p.estoque_minimo)
   
@@ -63,6 +69,7 @@ function calcularMetricas() {
   vendasRecentes.value = todasVendas.slice(0, 5)
   produtosBaixoEstoque.value = produtosBaixoEstoque.value.slice(0, 5) // Limita a lista da UI
 }
+
 function navegarPara(rota) {
   router.push({ name: rota })
 }
@@ -199,6 +206,7 @@ function formatCurrency(value) {
 </template>
 
 <style scoped>
+/* SEU CSS IDÊNTICO VAI AQUI... */
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;

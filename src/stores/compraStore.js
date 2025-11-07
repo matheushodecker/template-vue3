@@ -3,6 +3,11 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import CompraApi from '@/api/CompraApi' 
 
+// --- CORREÇÃO 1: Importar TODAS as stores de dependência ---
+import { useFornecedorStore } from '@/stores/fornecedorStore'
+import { useProdutoStore } from '@/stores/produtoStore'
+import { useFuncionarioStore } from '@/stores/funcionarioStore' 
+
 const compraApi = new CompraApi()
 
 export const useCompraStore = defineStore('compra', () => {
@@ -14,19 +19,32 @@ export const useCompraStore = defineStore('compra', () => {
     const meta = ref({ page: 1, total_pages: 1 })
     const isLoading = ref(false)
 
+    // --- CORREÇÃO 2: Iniciar TODAS as stores ---
+    // (Não precisa iniciar aqui, faremos dentro da action)
+
     // ACTIONS:
     
-    // Carrega as dependências necessárias para os dropdowns
+    // --- CORREÇÃO 3: A função loadDependencies foi 100% corrigida ---
     async function loadDependencies() {
         try {
-            const [fornecedores, funcionarios, produtos] = await Promise.all([
-                compraApi.buscarFornecedores(),
-                compraApi.buscarFuncionarios(),
-                compraApi.buscarProdutos()
+            // Inicia as stores aqui dentro
+            const fornecedorStore = useFornecedorStore()
+            const produtoStore = useProdutoStore()
+            const funcionarioStore = useFuncionarioStore()
+
+            // Chama as actions "Todos" das stores de dependência
+            // Não precisamos de "const [...] =" pois as stores se preenchem sozinhas
+            await Promise.all([
+                fornecedorStore.getFornecedoresTodos(),
+                produtoStore.getProdutosTodos(),
+                funcionarioStore.getFuncionariosTodos() // <-- Usando a store
             ]);
-            fornecedoresDisponiveis.value = fornecedores;
-            funcionariosDisponiveis.value = funcionarios;
-            produtosDisponiveis.value = produtos;
+            
+            // Atribui os valores lendo o state correto de cada store
+            fornecedoresDisponiveis.value = fornecedorStore.listaCompletaFornecedores;
+            produtosDisponiveis.value = produtoStore.produtos; // (No produtoStore, usamos o state 'produtos')
+            funcionariosDisponiveis.value = funcionarioStore.listaCompletaFuncionarios;
+
         } catch (error) {
             console.error("Erro ao carregar dependências (Fornecedores/Funcionários/Produtos):", error)
         }
@@ -59,6 +77,18 @@ export const useCompraStore = defineStore('compra', () => {
         await compraApi.excluirCompra(id)
         compras.value = compras.value.filter(c => c.id !== id);
     }
+    
+    async function proximaPagina() {
+      if (meta.value.page < meta.value.total_pages) {
+        await getCompras(meta.value.page + 1)
+      }
+    }
+
+    async function paginaAnterior() {
+      if (meta.value.page > 1) {
+        await getCompras(meta.value.page - 1)
+      }
+    }
 
     return {
         compras,
@@ -71,5 +101,7 @@ export const useCompraStore = defineStore('compra', () => {
         loadDependencies,
         salvarCompra,
         excluirCompra,
+        proximaPagina,
+        paginaAnterior,
     }
 })

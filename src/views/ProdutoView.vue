@@ -1,8 +1,17 @@
 <script setup>
 import { reactive, onMounted, ref, computed } from 'vue'
 import { useProdutoStore } from '@/stores/produtoStore'
+// 1. IMPORTAR AS STORES DE DEPENDÊNCIA
+import { useCategoriaStore } from '@/stores/categoriaStore'
+import { useFornecedorStore } from '@/stores/fornecedorStore'
+
 const produtoStore = useProdutoStore()
+// 2. INICIAR AS STORES DE DEPENDÊNCIA
+const categoriaStore = useCategoriaStore()
+const fornecedorStore = useFornecedorStore()
+
 const formAberto = ref(false)
+
 const defaultProduto = {
   id: null,
   nome: '',
@@ -17,6 +26,8 @@ const defaultProduto = {
   ativo: true,
 }
 const produto = reactive({ ...defaultProduto })
+
+// Computed para calcular a margem de lucro
 const margemLucroCalculada = computed(() => {
   const custo = Number(produto.preco_custo || 0);
   const venda = Number(produto.preco_venda || 0);
@@ -26,37 +37,59 @@ const margemLucroCalculada = computed(() => {
   }
   return 0;
 });
+
+// Ação no carregamento do componente
 onMounted(async () => {
   await Promise.all([
+    // 1. Busca a lista PAGINADA para a tabela principal
     produtoStore.getProdutos(1, '', '-id'),
-    produtoStore.loadDependencies()
+    
+    // 2. REMOVIDO: produtoStore.loadDependencies() 
+    
+    // 3. (NOVO) BUSCA AS LISTAS COMPLETAS DAS SUAS PRÓPRIAS STORES
+    //    (Assume que você criou as ações 'getCategoriasTodas' e 'getFornecedoresTodos'
+    //    nas respectivas stores, conforme o exemplo anterior)
+    categoriaStore.getCategoriasTodas(),
+    fornecedorStore.getFornecedoresTodos()
   ]);
 })
+
+// --- Funções do CRUD ---
+// (Todo o restante do script setup permanece o mesmo)
 function limpar() {
   Object.assign(produto, { ...defaultProduto })
   formAberto.value = false
 }
+
 function isFieldEmpty(value) {
   if (typeof value === 'string') return value.trim() === '';
   return value === null || value === undefined;
 }
+
 async function salvar() {
+  // Validação
   if (isFieldEmpty(produto.nome) || isFieldEmpty(produto.codigo_barras) || !produto.categoria || !produto.fornecedor) {
     alert("Nome, Código de Barras, Categoria e Fornecedor são obrigatórios.")
     return
   }
+  
+  // Preparação dos dados
   const dadosParaEnviar = { ...produto };
   if (isFieldEmpty(dadosParaEnviar.descricao)) { dadosParaEnviar.descricao = null; }
   dadosParaEnviar.preco_custo = Number(dadosParaEnviar.preco_custo);
   dadosParaEnviar.preco_venda = Number(dadosParaEnviar.preco_venda);
   dadosParaEnviar.estoque_atual = Number(dadosParaEnviar.estoque_atual);
   dadosParaEnviar.estoque_minimo = Number(dadosParaEnviar.estoque_minimo);
+  
+  // Envio para a Store
   await produtoStore.salvarProduto(dadosParaEnviar)
   limpar()
 }
+
 function editar(produto_para_editar) {
   Object.assign(produto, {
     ...produto_para_editar,
+    // Garante que números sejam tratados como números no formulário
     preco_custo: Number(produto_para_editar.preco_custo),
     preco_venda: Number(produto_para_editar.preco_venda),
     estoque_atual: Number(produto_para_editar.estoque_atual),
@@ -64,12 +97,14 @@ function editar(produto_para_editar) {
   })
   formAberto.value = true
 }
+
 async function excluir(id) {
   if (confirm("Tem certeza que deseja excluir este Produto?")) {
     await produtoStore.excluirProduto(id)
     limpar()
   }
 }
+
 function toggleForm() {
   if (formAberto.value) {
     limpar();
@@ -77,6 +112,7 @@ function toggleForm() {
     formAberto.value = true;
   }
 }
+
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -88,7 +124,7 @@ function formatCurrency(value) {
 
     <div class="crud-header">
       <div class="search-filter">
-      </div>
+        </div>
       <button class="btn btn-primary" @click="toggleForm">
         {{ formAberto ? 'Fechar Formulário' : 'Novo Produto' }}
       </button>
@@ -114,7 +150,7 @@ function formatCurrency(value) {
               <label for="categoria">Categoria*</label>
               <select id="categoria" v-model="produto.categoria" required>
                 <option :value="null" disabled>Selecione</option>
-                <option v-for="c in produtoStore.categoriasDisponiveis" :key="c.id" :value="c.id">
+                <option v-for="c in categoriaStore.listaCompletaCategorias" :key="c.id" :value="c.id">
                   {{ c.nome }}
                 </option>
               </select>
@@ -123,7 +159,7 @@ function formatCurrency(value) {
               <label for="fornecedor">Fornecedor*</label>
               <select id="fornecedor" v-model="produto.fornecedor" required>
                 <option :value="null" disabled>Selecione</option>
-                <option v-for="f in produtoStore.fornecedoresDisponiveis" :key="f.id" :value="f.id">
+                <option v-for="f in fornecedorStore.listaCompletaFornecedores" :key="f.id" :value="f.id">
                   {{ f.nome }}
                 </option>
               </select>
@@ -198,13 +234,13 @@ function formatCurrency(value) {
     <ul class="crud-list" v-else>
       <li v-for="p in produtoStore.produtos" :key="p.id" class="list-item" :class="{
         'status-inactive': !p.ativo,
-        'status-warning': p.ativo && p.estoque_baixo
+        'status-warning': p.ativo && p.estoque_baixo 
       }" @click="editar(p)">
         <div class="item-main-info">
           <span class="id-tag">#{{ p.id }}</span>
           <span class="item-name">{{ p.nome }}</span>
           <span class="item-status" v-if="!p.ativo">INATIVO</span>
-          <span class="item-status warning" v-if="p.ativo && p.estoque_baixo">ESTOQUE BAIXO</span>
+          <span class="item-status warning" v-if="p.ativo && p.estoque_atual <= p.estoque_minimo">ESTOQUE BAIXO</span>
         </div>
 
         <div class="item-details">

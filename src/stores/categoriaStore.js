@@ -6,7 +6,7 @@ const categoriaApi = new CategoriaApi()
 
 export const useCategoriaStore = defineStore('categoria', () => {
   // STATE:
-  const categorias = ref([])
+  const categorias = ref([]) // Lista paginada para o CRUD
   const meta = ref({
     page: 1,
     page_size: 0,
@@ -14,36 +14,48 @@ export const useCategoriaStore = defineStore('categoria', () => {
   })
   const isLoading = ref(false)
 
+  // NOVO: State para a lista completa (usada em dropdowns)
+  const listaCompletaCategorias = ref([])
+
   // ACTIONS:
 
-  // 1. Ação de Leitura e População do Estado (inclui paginação e busca)
+  // 1. Ação de Leitura Paginada (para o CRUD de Categorias)
   async function getCategorias(page = 1, search = '') {
     isLoading.value = true
     try {
         const data = await categoriaApi.buscarTodasAsCategorias(page, search)
-        
-        // O DRF com paginação padrão retorna um objeto com 'results' e os metadados
         categorias.value = data.results
-        
-        // Atualiza os metadados para controle de paginação
         meta.value.page = page
-        meta.value.page_size = data.page_size // Exemplo, depende da sua implementação DRF
-        meta.value.total_pages = data.total_pages // Exemplo, depende da sua implementação DRF
-
+        meta.value.page_size = data.page_size 
+        meta.value.total_pages = data.total_pages
     } catch (error) {
         console.error("Erro ao carregar categorias:", error)
-        // Lógica para tratar erros da API
     } finally {
         isLoading.value = false
     }
   }
 
-  // 2. Ação de Criação e Edição (o coração do CRUD)
+  // NOVO: Ação para carregar a lista completa (para o dropdown do ProdutoView)
+  async function getCategoriasTodas() {
+      // Otimização: Se a lista já foi carregada, não busca novamente.
+      if (listaCompletaCategorias.value.length > 0) {
+          return;
+      }
+
+      try {
+          // Chama a nova função da CategoriaApi
+          const data = await categoriaApi.buscarListaCompletaCategorias()
+          listaCompletaCategorias.value = data
+      } catch (error) {
+          console.error("Erro ao carregar lista completa de categorias:", error)
+      }
+  }
+
+  // 2. Ação de Criação e Edição
   async function salvarCategoria(categoria) {
     if (categoria.id) {
       // Edição (PUT)
       const data = await categoriaApi.atualizarCategoria(categoria)
-      // Atualização otimizada no estado local
       const index = categorias.value.findIndex((c) => c.id === data.id)
       if (index !== -1) {
           categorias.value.splice(index, 1, data)
@@ -51,7 +63,6 @@ export const useCategoriaStore = defineStore('categoria', () => {
     } else {
       // Criação (POST)
       const data = await categoriaApi.adicionarCategoria(categoria)
-      // Adiciona a nova categoria no início da lista (sem recarregar)
       categorias.value.unshift(data)
     }
   }
@@ -59,7 +70,6 @@ export const useCategoriaStore = defineStore('categoria', () => {
   // 3. Ação de Exclusão
   async function excluirCategoria(id) {
     await categoriaApi.excluirCategoria(id)
-    // Exclusão otimizada no estado local
     const index = categorias.value.findIndex((categoria) => categoria.id === id)
     if (index !== -1) {
         categorias.value.splice(index, 1)
@@ -79,6 +89,7 @@ export const useCategoriaStore = defineStore('categoria', () => {
     }
   }
 
+  // ATUALIZAÇÃO: Expor os novos states e actions
   return {
     categorias,
     meta,
@@ -87,6 +98,10 @@ export const useCategoriaStore = defineStore('categoria', () => {
     salvarCategoria,
     excluirCategoria,
     proximaPagina,
-    paginaAnterior
+    paginaAnterior,
+    
+    // NOVO: Itens expostos para o ProdutoView
+    listaCompletaCategorias,
+    getCategoriasTodas
   }
 })

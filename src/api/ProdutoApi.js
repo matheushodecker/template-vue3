@@ -2,7 +2,20 @@
 import axios from "axios";
 
 export default class ProdutoApi {
-    // GET: Buscar todos os produtos
+    // GET: Buscar TODOS os produtos (sem paginação, via /todos/)
+    async buscarTodosProdutosSemPaginacao(search = "", ordering = "") {
+        let url = "/produtos/todos/?";
+        if (search) {
+            url += `search=${search}&`;
+        }
+        if (ordering) {
+            url += `ordering=${ordering}`;
+        }
+        const { data } = await axios.get(url);
+        return data;
+    }
+    
+    // GET: Buscar todos os produtos (PAGINADO)
     async buscarTodosProdutos(page = 1, search = "", ordering = "") { 
         let url = `/produtos/?page=${page}&search=${search}`;
         // Adiciona o parâmetro de ordenação

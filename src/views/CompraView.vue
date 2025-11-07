@@ -17,6 +17,7 @@ const compra = reactive({ ...defaultCompra })
 const defaultItem = { produto: null, quantidade: 1, preco_unitario: 0.00 }
 const itemAtual = reactive({ ...defaultItem })
 
+// --- Computeds ---
 const subtotalItemAtual = computed(() => {
   return (itemAtual.quantidade || 0) * (itemAtual.preco_unitario || 0);
 });
@@ -30,34 +31,46 @@ const valorFinalCompra = computed(() => {
   return totalBruto + frete - desconto;
 });
 
+// --- Lifecycle ---
 onMounted(async () => {
-  await Promise.all([ compraStore.getCompras(), compraStore.loadDependencies() ]);
+  // Chama a lista paginada E as dependências (que agora usam as stores corretas)
+  await Promise.all([ 
+    compraStore.getCompras(), 
+    compraStore.loadDependencies() 
+  ]);
 })
+
+// --- Funções ---
 function limpar() {
   Object.assign(compra, { ...defaultCompra, itens: [] }) // Limpa itens também
   Object.assign(itemAtual, { ...defaultItem })
   itemIndexToEdit.value = null;
   formAberto.value = false
 }
+
 function isFieldEmpty(value) {
   if (typeof value === 'string') return value.trim() === '';
   return value === null || value === undefined;
 }
+
 function adicionarOuAtualizarItem() {
   if (!itemAtual.produto || itemAtual.quantidade < 1 || itemAtual.preco_unitario === null) {
     alert("Selecione o Produto, Quantidade e Preço Unitário.");
     return;
   }
+  // Pega o nome do produto da lista de dependências
   const produtoSelecionado = compraStore.produtosDisponiveis.find(p => p.id === itemAtual.produto);
   const novoItem = {
     ...itemAtual,
     subtotal: subtotalItemAtual.value,
     produto_nome: produtoSelecionado?.nome || 'Desconhecido'
   };
+  
   if (itemIndexToEdit.value !== null) {
+    // Atualiza item
     compra.itens.splice(itemIndexToEdit.value, 1, novoItem);
   } else {
-     // Previne duplicatas
+     // Adiciona novo item (prevenindo duplicatas)
     const exists = compra.itens.some(p => p.produto === novoItem.produto);
     if (exists) {
         alert(`O produto "${novoItem.produto_nome}" já está na lista.`);
@@ -68,10 +81,12 @@ function adicionarOuAtualizarItem() {
   Object.assign(itemAtual, { ...defaultItem });
   itemIndexToEdit.value = null;
 }
+
 function editarItem(item, index) {
   Object.assign(itemAtual, item);
   itemIndexToEdit.value = index;
 }
+
 function removerItem(index) {
   if (confirm("Remover este item?")) {
     compra.itens.splice(index, 1);
@@ -81,53 +96,66 @@ function removerItem(index) {
      }
   }
 }
+
 async function salvar() {
   if (isFieldEmpty(compra.numero_pedido) || !compra.fornecedor || !compra.funcionario || !compra.data_entrega_prevista || compra.itens.length === 0) {
     alert("Nº Pedido, Fornecedor, Funcionário, Data Prevista e ao menos um item são obrigatórios.")
     return
   }
+  
   const dadosParaEnviar = {
     ...compra,
     valor_total: valorFinalCompra.value,
     data_entrega_real: isFieldEmpty(compra.data_entrega_real) ? null : compra.data_entrega_real,
     observacoes: isFieldEmpty(compra.observacoes) ? null : compra.observacoes,
+    // Envia apenas os dados necessários dos itens
     itens: compra.itens.map(item => ({
-      produto: item.produto, quantidade: item.quantidade, preco_unitario: item.preco_unitario,
+      produto: item.produto, 
+      quantidade: item.quantidade, 
+      preco_unitario: item.preco_unitario,
     }))
   };
+  
   await compraStore.salvarCompra(dadosParaEnviar)
   limpar()
 }
+
 function editar(compra_para_editar) {
+  // Formata datas para 'YYYY-MM-DD' (necessário para <input type="date">)
   const dataEntregaPrevistaFormatada = compra_para_editar.data_entrega_prevista ? compra_para_editar.data_entrega_prevista.substring(0, 10) : null;
   const dataEntregaRealFormatada = compra_para_editar.data_entrega_real ? compra_para_editar.data_entrega_real.substring(0, 10) : null;
+  
   Object.assign(compra, {
     ...compra_para_editar,
     data_entrega_prevista: dataEntregaPrevistaFormatada,
     data_entrega_real: dataEntregaRealFormatada,
-    // Garante que 'itens' seja uma cópia reativa, se necessário
+    // Garante que 'itens' seja uma cópia reativa
     itens: JSON.parse(JSON.stringify(compra_para_editar.itens || []))
   })
   formAberto.value = true
 }
+
 async function excluir(id) {
   if (confirm("Excluir esta Compra?")) {
     await compraStore.excluirCompra(id)
     limpar()
   }
 }
+
 function toggleForm() {
   if (formAberto.value) { limpar(); }
   else { formAberto.value = true; }
 }
+
+// --- Helpers de Formatação ---
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+
 function formatDate(isoString) {
     if (!isoString) return 'N/A';
     try {
         const date = new Date(isoString);
-        // Adiciona verificação para datas inválidas que podem vir da API
         if (isNaN(date.getTime())) return 'Data inválida';
         // Formata para dd/mm/aaaa
         return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
@@ -202,7 +230,7 @@ function formatDate(isoString) {
               <label for="produtoItem">Produto</label>
               <select id="produtoItem" v-model="itemAtual.produto">
                 <option :value="null" disabled>Selecione</option>
-                 <option v-for="p in compraStore.produtosDisponiveis.filter(prod => !compra.itens.some(item => item.produto === prod.id) || itemAtual.produto === prod.id)" :key="p.id" :value="p.id">
+                <option v-for="p in compraStore.produtosDisponiveis.filter(prod => !compra.itens.some(item => item.produto === prod.id) || itemAtual.produto === prod.id)" :key="p.id" :value="p.id">
                   {{ p.nome }} (Custo Ref: {{ formatCurrency(p.preco_custo) }})
                 </option>
               </select>
@@ -236,11 +264,11 @@ function formatDate(isoString) {
                   </thead>
                   <tbody>
                     <tr v-for="(item, index) in compra.itens" :key="index">
-                      <td>{{ item.produto_nome }}</td>
-                      <td>{{ item.quantidade }}</td>
-                      <td>{{ formatCurrency(item.preco_unitario) }}</td>
-                      <td>{{ formatCurrency(item.subtotal) }}</td>
-                      <td>
+                      <td data-label="Produto">{{ item.produto_nome }}</td>
+                      <td data-label="Qtd">{{ item.quantidade }}</td>
+                      <td data-label="Custo Unit.">{{ formatCurrency(item.preco_unitario) }}</td>
+                      <td data-label="Subtotal">{{ formatCurrency(item.subtotal) }}</td>
+                      <td class="text-center">
                         <button type="button" @click="editarItem(item, index)" class="btn-action-table edit">Editar</button>
                         <button type="button" @click="removerItem(index)" class="btn-action-table delete">Remover</button>
                       </td>
@@ -294,7 +322,7 @@ function formatDate(isoString) {
     <div v-if="compraStore.isLoading" class="loading-message">
       Carregando compras...
     </div>
-     <div v-else-if="compraStore.compras.length === 0" class="empty-state">
+    <div v-else-if="compraStore.compras.length === 0" class="empty-state">
       <p>Nenhuma compra encontrada.</p>
     </div>
     <ul class="crud-list" v-else>
@@ -323,7 +351,7 @@ function formatDate(isoString) {
       </li>
     </ul>
 
-     <div class="paginator" v-if="!compraStore.isLoading && compraStore.meta.total_pages > 1">
+    <div class="paginator" v-if="!compraStore.isLoading && compraStore.meta.total_pages > 1">
        <button class="btn btn-light" :disabled="compraStore.meta.page <= 1" @click="compraStore.paginaAnterior">Anterior</button>
       <span>Página {{ compraStore.meta.page }} de {{ compraStore.meta.total_pages }}</span>
       <button class="btn btn-light" :disabled="compraStore.meta.page >= compraStore.meta.total_pages" @click="compraStore.proximaPagina">Próxima</button>
@@ -650,6 +678,10 @@ h2 {
 .item-table tbody tr:last-child td {
   border-bottom: none;
 }
+.item-table td.text-center {
+  text-align: center;
+}
+
 .btn-action-table {
   padding: 4px 8px;
   font-size: 0.8rem;
@@ -757,19 +789,18 @@ h2 {
       display: block;
       text-align: right; /* Alinha valor à direita */
       border-bottom: none;
-      padding: var(--spacing-xs) 0;
+      padding: 6px 4px;
   }
   .item-table td::before {
-      content: attr(data-label); /* Usa um atributo data-label (precisa adicionar no :key) */
+      content: attr(data-label); /* Usa o atributo data-label */
       float: left;
       font-weight: bold;
       color: var(--color-text-secondary);
       margin-right: var(--spacing-sm);
   }
-   .item-table td:last-child {
+   .item-table td.text-center {
        text-align: center; /* Centraliza botões */
        padding-top: var(--spacing-sm);
    }
-
 }
 </style>
