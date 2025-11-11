@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 
+// Usando o getter 'loggedIn' da store, que agora é computado
 const isLoggedIn = computed(() => authStore.loggedIn)
 const user = computed(() => authStore.user)
 

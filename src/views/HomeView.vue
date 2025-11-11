@@ -3,9 +3,11 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProdutoStore } from '@/stores/produtoStore'
 import { useVendaStore } from '@/stores/vendaStore'
+import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const produtoStore = useProdutoStore()
 const vendaStore = useVendaStore()
+const authStore = useAuthStore()
 const metricas = ref({
   vendasHoje: 0,
   totalVendasHoje: 0,
@@ -30,6 +32,7 @@ onMounted(async () => {
       // Alterado de getProdutos(1,...) para getProdutosTodos()
       // Isso garante que as métricas do dashboard sejam calculadas 
       // com base em TODOS os produtos, não apenas na página 1.
+      authStore.setToken(localStorage.getItem('psg_auth_token')),
       produtoStore.getProdutosTodos({ ordering: '-id' }),
       
       vendaStore.getVendas()
