@@ -264,7 +264,7 @@ const closeDropdowns = () => {
 .dropdown-content {
   display: none;
   position: absolute;
-  top: calc(100% + var(--spacing-sm));
+
   left: 0;
   background-color: var(--color-surface);
   min-width: 220px;
