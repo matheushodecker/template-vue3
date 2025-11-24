@@ -13,15 +13,28 @@ const toggleUserDropdown = () => {
   showUserDropdown.value = !showUserDropdown.value
 }
 
-// Fecha o dropdown se clicar fora
 const closeDropdowns = () => {
   showUserDropdown.value = false
+  showMobileMenu.value = false // Adicionado: Fecha o menu mobile
 }
+
+// Controla se o menu de navegação mobile está aberto
+const showMobileMenu = ref(false)
+const toggleMobileMenu = () => {
+  showMobileMenu.value = !showMobileMenu.value
+  // Garante que o dropdown do usuário feche ao abrir o menu principal
+  if (showMobileMenu.value) {
+    showUserDropdown.value = false
+  }
+}
+
+// Fecha o dropdowns e o menu mobile se clicar fora
+
 </script>
 
 <template>
   <div
-    v-if="showUserDropdown"
+    v-if="showUserDropdown || showMobileMenu"
     class="dropdown-overlay"
     @click="closeDropdowns"
   ></div>
@@ -33,6 +46,17 @@ const closeDropdowns = () => {
           <span class="logo-icon">🏪</span>
           <span class="logo-text">Mercadinho Loschicos</span>
         </router-link>
+
+        <button
+          class="menu-toggle"
+          :class="{ active: showMobileMenu }"
+          @click="toggleMobileMenu"
+          aria-label="Abrir menu de navegação"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
 
         <div class="nav-links">
           <router-link :to="{ name: 'caixa' }" class="nav-link cta-caixa">
@@ -81,13 +105,8 @@ const closeDropdowns = () => {
           </div>
         </div>
       </div>
-
       <div class="nav-right">
         <template v-if="isLoggedIn">
-          <router-link :to="{ name: 'usuario' }" class="nav-link profile-link">
-            <span class="link-text">Perfil</span>
-          </router-link>
-          
           <div class="user-menu">
             <button @click="toggleUserDropdown" class="user-menu-btn">
               <img
@@ -121,11 +140,136 @@ const closeDropdowns = () => {
         </template>
       </div>
     </nav>
+    
+    <transition name="slide">
+      <div v-if="showMobileMenu" class="mobile-menu">
+        <router-link 
+            :to="{ name: 'usuario' }" 
+            class="mobile-nav-link"
+            v-if="isLoggedIn"
+            @click="closeDropdowns"
+        >
+          <span class="link-icon">👤</span>
+          <span class="link-text">Perfil</span>
+        </router-link>
+        
+        <router-link 
+            :to="{ name: 'caixa' }" 
+            class="mobile-nav-link cta-caixa"
+            @click="closeDropdowns"
+        >
+          <span class="link-icon">🛒</span>
+          <span class="link-text">Caixa</span>
+        </router-link>
+
+        <router-link :to="{ name: 'venda' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">💰</span>
+           <span class="link-text">Vendas</span>
+         </router-link>
+         <router-link :to="{ name: 'produto' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">🏷️</span>
+           <span class="link-text">Produtos</span>
+         </router-link>
+         <router-link :to="{ name: 'estoque' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">📦</span>
+           <span class="link-text">Estoque</span>
+         </router-link>
+         <router-link :to="{ name: 'cliente' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">👥</span>
+           <span class="link-text">Clientes</span>
+         </router-link>
+         <router-link :to="{ name: 'relatorio' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">📈</span>
+           <span class="link-text">Relatórios</span>
+         </router-link>
+         
+         <hr class="mobile-menu-divider" />
+         <h4 class="mobile-menu-title">Mais Opções:</h4>
+         
+         <router-link :to="{ name: 'compra' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">🛍️</span>
+            <span class="link-text">Compras</span>
+         </router-link>
+         <router-link :to="{ name: 'fornecedor' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">🚚</span>
+            <span class="link-text">Fornecedores</span>
+         </router-link>
+         <router-link :to="{ name: 'categorias' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">📑</span>
+            <span class="link-text">Categorias</span>
+         </router-link>
+         <router-link :to="{ name: 'promocao' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">🎁</span>
+            <span class="link-text">Promoções</span>
+         </router-link>
+         
+         <hr class="mobile-menu-divider" />
+         
+         <router-link :to="{ name: 'funcionario' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">👷</span>
+            <span class="link-text">Funcionários</span>
+         </router-link>
+         <router-link :to="{ name: 'cargo' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">📌</span>
+            <span class="link-text">Cargos</span>
+         </router-link>
+         
+         <hr class="mobile-menu-divider" />
+         
+         <router-link :to="{ name: 'formaPagamento' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">💳</span>
+            <span class="link-text">Formas Pagamento</span>
+         </router-link>
+         <router-link :to="{ name: 'pagamento' }" class="mobile-nav-link" @click="closeDropdowns">
+            <span class="link-icon">💵</span>
+            <span class="link-text">Pagamentos</span>
+         </router-link>
+         
+      </div>
+    </transition>
+    
   </header>
 </template>
 
 <style scoped>
-/* Overlay para fechar dropdowns */
+/* Variáveis (Assumindo que estão definidas em outro lugar, mas incluídas aqui para contexto de valores) */
+/* :root {
+  --color-primary: #007bff;
+  --color-primary-dark: #0056b3;
+  --color-primary-light: #e6f2ff;
+  --color-danger: #dc3545;
+  --color-danger-dark: #b02a37;
+  --color-surface: #ffffff;
+  --color-background: #f8f9fa;
+  --color-border: #dee2e6;
+  --color-border-light: #f1f3f5;
+  --color-text-primary: #212529;
+  --color-text-secondary: #6c757d;
+  --color-text-inverse: #ffffff;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-full: 50%;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --transition-base: 0.2s ease;
+}
+*/
+
+/* Overlay para fechar dropdowns e menu mobile */
 .dropdown-overlay {
   position: fixed;
   top: 0;
@@ -139,11 +283,11 @@ const closeDropdowns = () => {
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
-  position: fixed; /* Alterado de sticky para fixed */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 1010; /* Acima do overlay */
+  z-index: 1010;
   height: 72px;
 }
 
@@ -188,7 +332,7 @@ const closeDropdowns = () => {
   white-space: nowrap;
 }
 
-/* --- Links de Navegação --- */
+/* --- Links de Navegação (Desktop) --- */
 .nav-links {
   display: flex;
   align-items: center;
@@ -246,7 +390,7 @@ const closeDropdowns = () => {
   font-size: 1.1rem;
 }
 
-/* --- Dropdown "Mais" --- */
+/* --- Dropdown "Mais" (Desktop) --- */
 .dropdown {
   position: relative;
 }
@@ -264,7 +408,6 @@ const closeDropdowns = () => {
 .dropdown-content {
   display: none;
   position: absolute;
-
   left: 0;
   background-color: var(--color-surface);
   min-width: 220px;
@@ -401,7 +544,117 @@ const closeDropdowns = () => {
   color: var(--color-text-inverse);
 }
 
-/* --- Responsividade --- */
+/* --- MENU MOBILE E TOGGLE (NOVOS ESTILOS) --- */
+
+/* Menu Toggle (Hambúrguer) */
+.menu-toggle {
+  display: none; /* Escondido por padrão (Desktop) */
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  position: relative;
+  /* Espaçamento em mobile, será ajustado na media query */
+  margin-right: 0; 
+  z-index: 1040;
+}
+.menu-toggle span {
+  display: block;
+  width: 100%;
+  height: 3px;
+  background-color: var(--color-text-primary);
+  border-radius: 3px;
+  margin-bottom: 5px;
+  transition: all 0.3s ease;
+}
+.menu-toggle span:last-child {
+  margin-bottom: 0;
+}
+
+/* Animação do X */
+.menu-toggle.active span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+.menu-toggle.active span:nth-child(2) {
+  opacity: 0;
+}
+.menu-toggle.active span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* Menu Mobile (Conteúdo flutuante) */
+.mobile-menu {
+  position: absolute;
+  top: 72px; /* Altura da navbar */
+  left: 0;
+  width: 100%;
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-xl);
+  z-index: 1020;
+  padding: var(--spacing-md);
+  border-bottom-left-radius: var(--border-radius-lg);
+  border-bottom-right-radius: var(--border-radius-lg);
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-md);
+  transition: all var(--transition-base);
+}
+.mobile-nav-link:hover {
+  background-color: var(--color-background);
+}
+.mobile-nav-link.router-link-active:not(.cta-caixa) {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-semibold);
+}
+.mobile-nav-link .link-icon {
+  font-size: 1.3rem;
+}
+.mobile-nav-link.cta-caixa {
+  margin: var(--spacing-sm) 0;
+}
+
+.mobile-menu-divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-md) 0;
+}
+.mobile-menu-title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-xs);
+}
+
+/* Transição de slide para o Vue */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease-out;
+}
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+
+/* --- RESPONSIVIDADE --- */
+
+/* Tablets/Medium Screens - Esconde texto, mantém ícones e texto do CTA Caixa */
 @media (max-width: 1200px) {
   /* Esconde o texto da maioria dos links, mantendo ícones */
   .nav-link:not(.cta-caixa) .link-text,
@@ -418,7 +671,7 @@ const closeDropdowns = () => {
     display: inline;
   }
   
-  /* Ajusta padding para ícones */
+  /* Ajusta padding para ícones ficarem centralizados */
   .nav-link {
     padding: var(--spacing-sm);
   }
@@ -427,6 +680,7 @@ const closeDropdowns = () => {
   }
 }
 
+/* Mobile/Small Screens - Ativa menu hambúrguer */
 @media (max-width: 768px) {
   .nav-container {
     padding: 0 var(--spacing-md);
@@ -436,28 +690,39 @@ const closeDropdowns = () => {
     display: none; /* Esconde texto do logo em mobile */
   }
 
-  /* Esconde "Perfil" e "Mais" */
+  /* 1. Oculta todos os links da barra principal (Desktop) */
+  .nav-links,
   .profile-link,
   .dropdown {
     display: none;
   }
-
-  /* Esconde todos os textos de link, mantendo só ícones */
-  .nav-link .link-text {
-    display: none;
-  }
   
-  .nav-links {
-    gap: var(--spacing-xs);
-    margin-left: auto; /* Empurra os links para o centro/direita */
+  /* 2. Exibe o botão de menu (Hambúrguer) e o move */
+  .menu-toggle {
+    display: block;
+    /* Move o toggle para o lado direito do logo e antes dos botões de login/usuário */
+    margin-left: auto; 
+    order: 1; /* Garante que fique antes do nav-right */
   }
 
+  /* 3. Ajuste o lado esquerdo */
   .nav-left {
-    flex: none;
+    flex: 1; /* Permite que o logo e o toggle usem o espaço */
+    justify-content: flex-start;
+    gap: var(--spacing-md);
   }
   
+  /* 4. Garante que o menu do usuário/login fique no extremo direito */
   .nav-right {
-    margin-left: auto;
+    order: 2; /* Garante que fique após o toggle */
+    margin-left: var(--spacing-md); /* Espaçamento entre o toggle e os botões */
+  }
+}
+
+/* Garante que o mobile menu não apareça em desktop */
+@media (min-width: 769px) {
+  .mobile-menu {
+    display: none !important;
   }
 }
 </style>
