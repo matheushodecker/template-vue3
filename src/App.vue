@@ -265,4 +265,23 @@ textarea:disabled {
   margin-bottom: var(--spacing-md);
 }
 
+/* --- App.vue - Adicionar ao final do style --- */
+@media (max-width: 768px) {
+  .app-main-content {
+    /* Reduz o padding lateral para ganhar espaço */
+    padding: calc(72px + 16px) 12px 16px 12px !important; 
+    overflow-x: hidden; /* Evita scroll horizontal indesejado */
+  }
+
+  /* Ajuste global de tipografia para leitura */
+  body {
+    font-size: 14px; /* Base mínima recomendada */
+  }
+
+  /* Botões mais altos para facilitar o toque (Área de toque > 44px) */
+  button, .btn, input, select {
+    min-height: 44px; 
+  }
+}
+
 </style>

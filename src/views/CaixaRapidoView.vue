@@ -727,4 +727,121 @@ function formatCurrency(value) {
     flex: 2;
   }
 }
+/* --- CaixaRapidoView.vue - Adicionar ao final --- */
+@media (max-width: 768px) {
+  .caixa-container {
+    margin: -16px -12px !important; /* Remove margens do container pai */
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 64px); /* Altura total menos navbar */
+  }
+
+  .caixa-header {
+    top: 64px;
+    padding: 10px 16px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .caixa-header h1 {
+    font-size: 1.2rem;
+  }
+
+  /* Transforma o layout em coluna */
+  .caixa-content {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    padding-bottom: 180px; /* Espaço para o footer fixo */
+    overflow-y: auto; /* Permite scroll no conteúdo */
+  }
+
+  /* Card de Inputs */
+  .painel-entrada {
+    order: 1; /* Inputs primeiro */
+  }
+
+  /* Inputs maiores */
+  .input-with-button input[type='text'], 
+  .quantidade-input {
+    height: 50px; /* Fácil de tocar */
+  }
+
+  .atalhos-grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colunas em vez de auto-fill */
+  }
+  
+  .atalho-produto {
+    padding: 8px;
+    font-size: 0.9rem;
+    text-align: center;
+    align-items: center;
+  }
+
+  /* --- Mágica do Carrinho e Total --- */
+  .painel-carrinho-wrapper {
+    position: static;
+    order: 2; /* Carrinho depois dos inputs */
+  }
+
+  .carrinho-itens {
+    max-height: 300px; /* Limita altura da lista de itens no mobile */
+    overflow-y: auto;
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  /* Footer Fixo (Sticky Bottom) para finalizar venda rápido */
+  .carrinho-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    padding: 16px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Dividir espaço */
+    gap: 10px;
+    align-items: center;
+  }
+
+  .totais {
+    margin: 0;
+  }
+  
+  /* Esconde detalhes menos importantes do total no footer fixo */
+  .total-linha:not(.total-final) {
+    display: none; 
+  }
+
+  .total-linha.total-final {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.2rem;
+    text-align: left;
+  }
+  
+  .total-linha.total-final span:first-child {
+    display: none; /* Esconde a palavra "TOTAL" para economizar espaço */
+  }
+
+  .desconto-section {
+    display: none; /* Desconto pode ser acessado rolando a tela, não no footer fixo */
+  }
+
+  /* Botão Finalizar Gigante */
+  .btn-finalizar {
+    grid-column: 2;
+    height: 50px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
 </style>

@@ -725,4 +725,56 @@ const toggleMobileMenu = () => {
     display: none !important;
   }
 }
+/* --- NavBar.vue - Substituir/Adicionar a parte responsiva --- */
+@media (max-width: 768px) {
+  .nav-container {
+    padding: 0 16px;
+    height: 64px; /* Navbar um pouco menor no mobile */
+  }
+
+  .navbar {
+    height: 64px;
+  }
+
+  /* Menu Mobile Estilo "Gaveta" (Drawer) */
+  .mobile-menu {
+    top: 64px;
+    height: calc(100vh - 64px); /* Ocupa toda a altura restante */
+    border-radius: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--color-surface);
+  }
+
+  /* Links grandes para facilitar o toque */
+  .mobile-nav-link {
+    padding: 16px; /* Área de toque generosa */
+    font-size: 1.1rem;
+    border: 1px solid var(--color-border-light);
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+
+  /* Destaque para o botão Caixa */
+  .mobile-nav-link.cta-caixa {
+    background-color: var(--color-primary);
+    color: white !important;
+    font-weight: bold;
+    text-align: center;
+    justify-content: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+
+  /* Ícone do menu hamburguer maior */
+  .menu-toggle {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+}
 </style>

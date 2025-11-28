@@ -486,4 +486,38 @@ function formatCurrency(value) {
     grid-template-columns: 1fr;
   }
 }
+@media (max-width: 768px) {
+  .dashboard-header h1 {
+    font-size: 1.8rem;
+  }
+
+  /* Cards de Métricas empilhados */
+  .metricas-grid {
+    grid-template-columns: 1fr; /* Uma coluna */
+    gap: 12px;
+  }
+
+  .metrica-card {
+    padding: 20px;
+    /* Destaque visual no mobile */
+    border-left: 5px solid var(--color-primary); 
+  }
+
+  /* Botões de Ação Rápida em Grid 2x2 para aproveitar espaço */
+  .acoes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .acao-btn {
+    flex-direction: column; /* Ícone em cima, texto embaixo */
+    text-align: center;
+    padding: 16px 8px;
+    gap: 8px;
+    height: auto;
+  }
+  
+  .dashboard-grid-listas {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
